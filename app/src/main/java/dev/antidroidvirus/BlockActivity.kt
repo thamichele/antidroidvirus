@@ -24,6 +24,7 @@ class BlockActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Hardening.protect(this)
         val pkgExtra = intent.getStringExtra(Alerts.EXTRA_PKG)
         val permExtra = intent.getStringExtra(Alerts.EXTRA_PERM)
         if (pkgExtra == null || permExtra == null) {

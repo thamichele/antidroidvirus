@@ -52,8 +52,15 @@ class MonitorService : Service() {
         }
     }
 
+    private var started = false
+
     override fun onCreate() {
         super.onCreate()
+        // Dopo il kill switch il sistema potrebbe riavviare il servizio "sticky": resta spento.
+        if (!isEnabled(this)) {
+            stopSelf()
+            return
+        }
         startForeground(
             NOTIFICATION_ID, serviceNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
         )
@@ -73,13 +80,19 @@ class MonitorService : Service() {
             handler,
         )
         handler.post(periodic)
+        started = true
         running = true
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int =
+        if (started) START_STICKY else START_NOT_STICKY
 
     override fun onDestroy() {
         running = false
+        if (!started) {
+            super.onDestroy()
+            return
+        }
         getSystemService(CameraManager::class.java).unregisterAvailabilityCallback(cameraCallback)
         getSystemService(AudioManager::class.java).unregisterAudioRecordingCallback(audioCallback)
         unregisterReceiver(screenReceiver)
@@ -99,6 +112,18 @@ class MonitorService : Service() {
         .setSmallIcon(R.drawable.ic_notify)
         .setContentTitle("Monitoraggio permessi attivo")
         .setOngoing(true)
+        .setVisibility(Notification.VISIBILITY_SECRET)
+        .addAction(
+            Notification.Action.Builder(
+                null,
+                "Spegni tutto",
+                PendingIntent.getBroadcast(
+                    this, 1,
+                    Intent(this, ActionReceiver::class.java).setAction(ActionReceiver.ACTION_KILL),
+                    PendingIntent.FLAG_IMMUTABLE,
+                ),
+            ).build()
+        )
         .setContentIntent(
             PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
         )
@@ -121,11 +146,12 @@ class MonitorService : Service() {
 
         fun start(context: Context) {
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_ENABLED, true).apply()
+            KillSwitch.setBootReceiverEnabled(context, true)
             context.startForegroundService(Intent(context, MonitorService::class.java))
         }
 
         fun stop(context: Context) {
-            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_ENABLED, false).apply()
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_ENABLED, false).commit()
             context.stopService(Intent(context, MonitorService::class.java))
         }
     }

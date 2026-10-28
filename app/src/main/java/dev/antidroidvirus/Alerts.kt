@@ -37,6 +37,14 @@ object Alerts {
             .setContentTitle("$label sta usando ${perm.label}!")
             .setContentText("Alle $at · app non in whitelist per ${perm.title.lowercase(Locale.ITALIAN)}")
             .setCategory(Notification.CATEGORY_ALARM)
+            // Sulla schermata di blocco non si mostra quale app né quale permesso.
+            .setVisibility(Notification.VISIBILITY_PRIVATE)
+            .setPublicVersion(
+                Notification.Builder(context, CHANNEL_ALERTS)
+                    .setSmallIcon(R.drawable.ic_notify)
+                    .setContentTitle("Uso di un permesso rilevato")
+                    .build()
+            )
             .setAutoCancel(true)
             .setContentIntent(openApp(context))
             .addAction(action(context, "Fidati", broadcast(context, ActionReceiver.ACTION_TRUST, pkg, perm)))

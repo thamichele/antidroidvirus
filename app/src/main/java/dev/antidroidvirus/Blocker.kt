@@ -8,6 +8,7 @@ import rikka.shizuku.Shizuku
 object Blocker {
     const val SHIZUKU_REQUEST_CODE = 42
     private const val TAG = "Blocker"
+    private val PACKAGE_NAME = Regex("^[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z0-9_]+)+$")
 
     fun shizukuRunning(): Boolean = try {
         Shizuku.pingBinder()
@@ -20,6 +21,8 @@ object Blocker {
 
     /** Va chiamato fuori dal main thread. Ritorna true se almeno una revoca è andata a buon fine. */
     fun revoke(pkg: String, perm: Perm): Boolean {
+        // Il nome pacchetto finisce in un comando eseguito come shell: solo caratteri validi.
+        if (!PACKAGE_NAME.matches(pkg)) return false
         var revoked = false
         // pm revoke fallisce per i permessi che l'app non ha mai chiesto: si ignora.
         for (permission in perm.permissions) {
