@@ -15,16 +15,7 @@ data class OpUsage(
 object AppOpsReader {
     const val PERMISSION = "android.permission.GET_APP_OPS_STATS"
 
-    val WATCHED_OPS = arrayOf(
-        AppOpsManager.OPSTR_FINE_LOCATION,
-        AppOpsManager.OPSTR_COARSE_LOCATION,
-        AppOpsManager.OPSTR_CAMERA,
-        AppOpsManager.OPSTR_RECORD_AUDIO,
-        AppOpsManager.OPSTR_READ_CONTACTS,
-        AppOpsManager.OPSTR_READ_CALL_LOG,
-        AppOpsManager.OPSTR_READ_SMS,
-        "android:read_clipboard",
-    )
+    val WATCHED_OPS = Perm.allOps
 
     // AppOpsManager.OP_FLAGS_ALL: accessi propri, tramite proxy e di attribuzione.
     private const val OP_FLAGS_ALL = 0x1F
@@ -60,15 +51,5 @@ object AppOpsReader {
         return result
     }
 
-    fun describe(op: String): String = when (op) {
-        AppOpsManager.OPSTR_FINE_LOCATION -> "la posizione precisa"
-        AppOpsManager.OPSTR_COARSE_LOCATION -> "la posizione"
-        AppOpsManager.OPSTR_CAMERA -> "la fotocamera"
-        AppOpsManager.OPSTR_RECORD_AUDIO -> "il microfono"
-        AppOpsManager.OPSTR_READ_CONTACTS -> "i contatti"
-        AppOpsManager.OPSTR_READ_CALL_LOG -> "il registro chiamate"
-        AppOpsManager.OPSTR_READ_SMS -> "gli SMS"
-        "android:read_clipboard" -> "gli appunti"
-        else -> op.removePrefix("android:")
-    }
+    fun describe(op: String): String = Perm.fromOp(op)?.label ?: op.removePrefix("android:")
 }

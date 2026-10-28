@@ -5,89 +5,85 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.os.Handler
-import android.os.Looper
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-/** Avvisa per le app fuori whitelist: fino a [REPEATS] notifiche, a [INTERVAL_MS] di distanza. */
+/**
+ * Una notifica per app e permesso fuori whitelist. Per non subire raffiche (un'app che legge
+ * la posizione ogni minuto) la stessa coppia non riavvisa prima di [COOLDOWN_MS]; gli usi
+ * restano comunque nel registro.
+ */
 object Alerts {
     const val CHANNEL_ALERTS = "alerts"
-    const val REPEATS = 3
-    private const val INTERVAL_MS = 30_000L
+    private const val COOLDOWN_MS = 10 * 60_000L
 
-    private val handler = Handler(Looper.getMainLooper())
-    private val active = HashSet<String>()
+    private val lastAlert = HashMap<String, Long>()
 
-    fun key(pkg: String, op: String) = "$pkg|$op"
+    fun notificationId(pkg: String, perm: Perm) = "$pkg|${perm.name}".hashCode()
 
-    fun alert(context: Context, pkg: String, op: String, time: Long) {
-        val key = key(pkg, op)
-        val app = context.applicationContext
-        handler.post {
-            if (!active.add(key)) return@post
-            send(app, pkg, op, time, 1)
+    fun alert(context: Context, pkg: String, perm: Perm, time: Long) {
+        val key = "$pkg|${perm.name}"
+        val now = System.currentTimeMillis()
+        synchronized(lastAlert) {
+            if (now - (lastAlert[key] ?: 0L) < COOLDOWN_MS) return
+            lastAlert[key] = now
         }
-    }
 
-    private fun send(context: Context, pkg: String, op: String, time: Long, count: Int) {
-        val key = key(pkg, op)
-        if (key !in active) return
-        if (Whitelist.isTrusted(context, pkg)) {
-            stop(context, key)
-            return
-        }
         val label = Apps.label(context, pkg)
         val at = SimpleDateFormat("HH:mm", Locale.ITALIAN).format(Date(time))
         val notification = Notification.Builder(context, CHANNEL_ALERTS)
             .setSmallIcon(R.drawable.ic_notify)
-            .setContentTitle("$label sta usando ${AppOpsReader.describe(op)}!")
-            .setContentText("Avviso $count di $REPEATS · alle $at · app non in whitelist")
+            .setContentTitle("$label sta usando ${perm.label}!")
+            .setContentText("Alle $at · app non in whitelist per ${perm.title.lowercase(Locale.ITALIAN)}")
             .setCategory(Notification.CATEGORY_ALARM)
-            .setOnlyAlertOnce(false)
             .setAutoCancel(true)
             .setContentIntent(openApp(context))
-            .setDeleteIntent(action(context, ActionReceiver.ACTION_IGNORE, pkg, op))
-            .addAction(
-                Notification.Action.Builder(null, "Fidati", action(context, ActionReceiver.ACTION_TRUST, pkg, op)).build()
-            )
-            .addAction(
-                Notification.Action.Builder(null, "Ignora", action(context, ActionReceiver.ACTION_IGNORE, pkg, op)).build()
-            )
+            .addAction(action(context, "Fidati", broadcast(context, ActionReceiver.ACTION_TRUST, pkg, perm)))
+            .addAction(action(context, "Blocca", block(context, pkg, perm)))
+            .addAction(action(context, "Ignora", broadcast(context, ActionReceiver.ACTION_IGNORE, pkg, perm)))
             .build()
-        context.getSystemService(NotificationManager::class.java).notify(key.hashCode(), notification)
-
-        if (count < REPEATS) {
-            handler.postDelayed({ send(context, pkg, op, time, count + 1) }, key, INTERVAL_MS)
-        } else {
-            active.remove(key)
-        }
+        context.getSystemService(NotificationManager::class.java).notify(notificationId(pkg, perm), notification)
     }
 
-    /** Ferma le ripetizioni e chiude la notifica. Va chiamato sul main thread. */
-    fun stop(context: Context, key: String) {
-        active.remove(key)
-        handler.removeCallbacksAndMessages(key)
-        context.getSystemService(NotificationManager::class.java).cancel(key.hashCode())
+    fun dismiss(context: Context, pkg: String, perm: Perm) {
+        context.getSystemService(NotificationManager::class.java).cancel(notificationId(pkg, perm))
     }
 
-    fun stopAllFor(context: Context, pkg: String) {
-        for (op in AppOpsReader.WATCHED_OPS) stop(context, key(pkg, op))
+    fun dismissAll(context: Context, pkg: String) {
+        for (perm in Perm.entries) dismiss(context, pkg, perm)
     }
+
+    private fun action(context: Context, title: String, intent: PendingIntent) =
+        Notification.Action.Builder(null, title, intent).build()
 
     private fun openApp(context: Context): PendingIntent = PendingIntent.getActivity(
         context, 0, Intent(context, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE,
     )
 
-    private fun action(context: Context, action: String, pkg: String, op: String): PendingIntent {
+    private fun broadcast(context: Context, action: String, pkg: String, perm: Perm): PendingIntent {
         val intent = Intent(context, ActionReceiver::class.java)
             .setAction(action)
-            .putExtra(ActionReceiver.EXTRA_PKG, pkg)
-            .putExtra(ActionReceiver.EXTRA_OP, op)
+            .putExtra(EXTRA_PKG, pkg)
+            .putExtra(EXTRA_PERM, perm.name)
         return PendingIntent.getBroadcast(
-            context, "$action|$pkg|$op".hashCode(), intent,
+            context, "$action|$pkg|${perm.name}".hashCode(), intent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
     }
+
+    // "Blocca" apre un'activity: da Android 12 una notifica non può avviare activity passando da un receiver.
+    private fun block(context: Context, pkg: String, perm: Perm): PendingIntent {
+        val intent = Intent(context, BlockActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            .putExtra(EXTRA_PKG, pkg)
+            .putExtra(EXTRA_PERM, perm.name)
+        return PendingIntent.getActivity(
+            context, "block|$pkg|${perm.name}".hashCode(), intent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+    }
+
+    const val EXTRA_PKG = "pkg"
+    const val EXTRA_PERM = "perm"
 }

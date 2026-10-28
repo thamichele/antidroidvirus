@@ -23,6 +23,8 @@ class Monitor(private val context: Context) {
         val firstRun = !prefs.getBoolean(KEY_BASELINE, false)
         val editor = prefs.edit()
         val store = EventStore.get(context)
+        // Posizione precisa e approssimativa arrivano insieme: un solo evento per app e permesso.
+        val fresh = HashMap<String, Pair<OpUsage, Perm>>()
         for (usage in usages) {
             if (usage.pkg == context.packageName) continue
             val key = "${usage.pkg}|${usage.op}"
@@ -31,10 +33,16 @@ class Monitor(private val context: Context) {
             editor.putLong(key, usage.lastAccess)
             // Alla prima esecuzione si registra solo il punto di partenza, senza avvisi sul passato.
             if (firstRun) continue
+            val perm = Perm.fromOp(usage.op) ?: continue
+            val group = "${usage.pkg}|${perm.name}"
+            val current = fresh[group]
+            if (current == null || usage.lastAccess > current.first.lastAccess) fresh[group] = usage to perm
+        }
 
-            val trusted = Whitelist.isTrusted(context, usage.pkg)
+        for ((usage, perm) in fresh.values) {
+            val trusted = Whitelist.isTrusted(context, usage.pkg, perm)
             store.add(UsageEvent(usage.lastAccess, usage.pkg, usage.op, trusted))
-            if (!trusted) Alerts.alert(context, usage.pkg, usage.op, usage.lastAccess)
+            if (!trusted) Alerts.alert(context, usage.pkg, perm, usage.lastAccess)
         }
         editor.putBoolean(KEY_BASELINE, true).apply()
         store.pruneOlderThan(System.currentTimeMillis() - RETENTION_MS)

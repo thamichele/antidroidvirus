@@ -24,7 +24,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -51,6 +50,24 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.input.pointer.pointerInput
+import kotlinx.coroutines.launch
+import rikka.shizuku.Shizuku
+import java.text.Collator
+import java.text.Normalizer
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -137,6 +154,24 @@ private fun StatusCard(tick: Int) {
                         .setPrimaryClip(ClipData.newPlainText("comando", grantCommand))
                 }) { Text("Copia comando") }
             }
+            val shizukuRunning = remember(tick) { Blocker.shizukuRunning() }
+            val shizukuGranted = remember(tick) { Blocker.shizukuGranted() }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Shizuku (per Blocca): " + when {
+                        shizukuGranted -> "attivo"
+                        shizukuRunning -> "da autorizzare"
+                        else -> "spento"
+                    },
+                    Modifier.weight(1f),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                if (shizukuRunning && !shizukuGranted) {
+                    OutlinedButton(onClick = { Shizuku.requestPermission(Blocker.SHIZUKU_REQUEST_CODE) }) {
+                        Text("Autorizza")
+                    }
+                }
+            }
             if (!unrestricted) {
                 Text(
                     "Batteria: metti l'app tra le \"App mai in sospensione\", altrimenti One UI può fermarla.",
@@ -184,46 +219,172 @@ private fun EventLog(tick: Int) {
     }
 }
 
-private data class AppRow(val pkg: String, val label: String)
+private data class AppRow(val pkg: String, val label: String, val system: Boolean)
 
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 private fun WhitelistScreen() {
     val context = LocalContext.current
     var trustSystem by remember { mutableStateOf(Whitelist.trustSystemApps(context)) }
-    var trusted by remember { mutableStateOf(Whitelist.packages(context)) }
-    val apps = remember { userApps(context) }
-
-    LazyColumn {
-        item {
-            Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Considera fidate le app di sistema", Modifier.weight(1f))
-                Switch(checked = trustSystem, onCheckedChange = {
-                    Whitelist.setTrustSystemApps(context, it)
-                    trustSystem = it
-                })
-            }
-            HorizontalDivider()
+    var showSystem by remember { mutableStateOf(false) }
+    var query by remember { mutableStateOf("") }
+    var entries by remember { mutableStateOf(Whitelist.entries(context)) }
+    var expanded by remember { mutableStateOf<String?>(null) }
+    val allApps = remember { installedApps(context) }
+    val apps = remember(query, showSystem, allApps) {
+        val q = query.trim()
+        allApps.filter {
+            (showSystem || !it.system) &&
+                (q.isEmpty() || it.label.contains(q, ignoreCase = true) || it.pkg.contains(q, ignoreCase = true))
         }
-        items(apps, key = { it.pkg }) { app ->
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(app.label, style = MaterialTheme.typography.bodyLarge)
-                    Text(app.pkg, style = MaterialTheme.typography.bodySmall)
+    }
+    val firstIndex = remember(apps) {
+        LinkedHashMap<Char, Int>().also { map ->
+            apps.forEachIndexed { i, app -> map.putIfAbsent(indexLetter(app.label), i) }
+        }
+    }
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+
+    Column {
+        Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("Considera fidate le app di sistema", Modifier.weight(1f))
+            Switch(checked = trustSystem, onCheckedChange = {
+                Whitelist.setTrustSystemApps(context, it)
+                trustSystem = it
+            })
+        }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("Mostra app di sistema", Modifier.weight(1f))
+            Switch(checked = showSystem, onCheckedChange = { showSystem = it })
+        }
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            label = { Text("Cerca app") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        )
+        Box(Modifier.fillMaxSize()) {
+            LazyColumn(state = listState, modifier = Modifier.fillMaxSize().padding(end = 28.dp)) {
+                items(apps, key = { it.pkg }) { app ->
+                    val scopes = entries.filter { it.startsWith("${app.pkg}|") }.map { it.substringAfter('|') }.toSet()
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { expanded = if (expanded == app.pkg) null else app.pkg }
+                            .padding(vertical = 8.dp)
+                    ) {
+                        Text(app.label, style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            trustSummary(scopes),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (scopes.isEmpty()) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.primary,
+                        )
+                        if (expanded == app.pkg) {
+                            val toggle = { scopeName: String ->
+                                val on = scopeName !in scopes
+                                Whitelist.setTrusted(context, app.pkg, scopeName, on)
+                                if (on) Alerts.dismissAll(context, app.pkg)
+                                entries = Whitelist.entries(context)
+                            }
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.padding(top = 4.dp),
+                            ) {
+                                FilterChip(
+                                    selected = Whitelist.ALL in scopes,
+                                    onClick = { toggle(Whitelist.ALL) },
+                                    label = { Text("Tutti") },
+                                )
+                                for (perm in Perm.entries) {
+                                    FilterChip(
+                                        selected = perm.name in scopes,
+                                        onClick = { toggle(perm.name) },
+                                        label = { Text(perm.title) },
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    HorizontalDivider()
                 }
-                Checkbox(checked = app.pkg in trusted, onCheckedChange = { on ->
-                    Whitelist.setTrusted(context, app.pkg, on)
-                    if (on) Alerts.stopAllFor(context, app.pkg)
-                    trusted = Whitelist.packages(context)
-                })
+            }
+            LetterIndex(
+                letters = firstIndex.keys.toList(),
+                modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight().width(24.dp),
+            ) { letter ->
+                firstIndex[letter]?.let { index -> scope.launch { listState.scrollToItem(index) } }
             }
         }
     }
 }
 
-private fun userApps(context: Context): List<AppRow> {
+/** Colonna di lettere: tocca o trascina per saltare alla prima app con quella iniziale. */
+@Composable
+private fun LetterIndex(letters: List<Char>, modifier: Modifier, onLetter: (Char) -> Unit) {
+    if (letters.isEmpty()) return
+    val currentOnLetter by rememberUpdatedState(onLetter)
+    var active by remember { mutableStateOf<Char?>(null) }
+    fun pick(y: Float, height: Int) {
+        val i = (y / height * letters.size).toInt().coerceIn(0, letters.size - 1)
+        val letter = letters[i]
+        if (letter != active) {
+            active = letter
+            currentOnLetter(letter)
+        }
+    }
+    Column(
+        modifier
+            .pointerInput(letters) {
+                detectTapGestures { offset ->
+                    active = null
+                    pick(offset.y, size.height)
+                }
+            }
+            .pointerInput(letters) {
+                detectVerticalDragGestures(
+                    onDragStart = { offset -> pick(offset.y, size.height) },
+                    onDragEnd = { active = null },
+                    onDragCancel = { active = null },
+                ) { change, _ -> pick(change.position.y, size.height) }
+            },
+        verticalArrangement = Arrangement.SpaceEvenly,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        for (letter in letters) {
+            Text(
+                letter.toString(),
+                style = MaterialTheme.typography.labelSmall,
+                color = if (letter == active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+private fun trustSummary(scopes: Set<String>): String = when {
+    scopes.isEmpty() -> "Non fidata"
+    Whitelist.ALL in scopes -> "Fidata per tutti i permessi"
+    else -> "Fidata per: " + Perm.entries.filter { it.name in scopes }.joinToString(", ") { it.title }
+}
+
+private fun indexLetter(label: String): Char {
+    val first = label.trim().firstOrNull() ?: return '#'
+    val base = Normalizer.normalize(first.toString(), Normalizer.Form.NFD).first().uppercaseChar()
+    return if (base in 'A'..'Z') base else '#'
+}
+
+private fun installedApps(context: Context): List<AppRow> {
     val pm = context.packageManager
+    val collator = Collator.getInstance(Locale.ITALIAN)
     return pm.getInstalledApplications(0)
-        .filter { it.flags and ApplicationInfo.FLAG_SYSTEM == 0 && it.packageName != context.packageName }
-        .map { AppRow(it.packageName, pm.getApplicationLabel(it).toString()) }
-        .sortedBy { it.label.lowercase() }
+        .filter { it.packageName != context.packageName }
+        .map {
+            AppRow(
+                it.packageName,
+                pm.getApplicationLabel(it).toString(),
+                it.flags and (ApplicationInfo.FLAG_SYSTEM or ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0,
+            )
+        }
+        .sortedWith(compareBy(collator) { it.label })
 }

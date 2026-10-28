@@ -15,9 +15,14 @@ e senza Play Store.
   a schermo spento, necessaria per la posizione che non ha callback pubbliche.
 - Siccome AppOps conserva l'orario dell'ultimo accesso, un uso avvenuto a schermo spento viene
   comunque registrato alla lettura successiva.
-- Ogni uso finisce nel registro locale (30 giorni). Se l'app non è in whitelist parte una notifica,
-  ripetuta fino a 3 volte a 30 secondi di distanza. "Fidati" la aggiunge alla whitelist, "Ignora"
-  ferma le ripetizioni.
+- Ogni uso finisce nel registro locale (30 giorni). Se l'app non è in whitelist per quel permesso
+  parte una notifica (al massimo una ogni 10 minuti per la stessa app e lo stesso permesso).
+  - **Fidati** la mette in whitelist per quel permesso.
+  - **Blocca** revoca il permesso all'app via Shizuku (`pm revoke`); se Shizuku è spento apre la
+    pagina dei permessi dell'app. Android chiude l'app quando le si revoca un permesso.
+  - **Ignora** chiude la notifica.
+- Whitelist per permesso (Posizione, Fotocamera, Microfono, Contatti, Registro chiamate, SMS,
+  Appunti) o per tutti, con ricerca per nome e indice alfabetico laterale.
 - Nessun accesso a internet.
 
 ## Installazione
@@ -43,6 +48,12 @@ e senza Play Store.
 - Che il permesso concesso via ADB resti dopo un riavvio.
 - Il rumore: con "Considera fidate le app di sistema" attivo (default) i servizi di sistema e Google
   non generano avvisi, ma restano nel registro.
+
+## Shizuku (per "Blocca")
+
+Installa Shizuku, avvialo con il debug wireless e autorizza AntiDroidVirus dalla schermata
+principale dell'app (o al primo "Blocca"). Senza root Shizuku va riavviato dopo ogni riavvio del
+telefono; il monitoraggio funziona comunque anche senza.
 
 ## Prossimi passi
 
