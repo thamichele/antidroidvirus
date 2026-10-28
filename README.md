@@ -22,8 +22,8 @@ e senza Play Store.
 
 ## Installazione
 
-1. Scarica l'APK dall'ultima esecuzione di **Actions › Build APK** (artifact
-   `antidroidvirus-debug-apk`), oppure compila con Android Studio.
+1. Dal telefono apri la release [**latest**](../../releases/tag/latest) e scarica
+   `antidroidvirus.apk` (viene ricompilato a ogni push).
 2. Sul telefono disattiva temporaneamente **Blocco automatico** (Impostazioni › Sicurezza e
    privacy) e installa l'APK.
 3. Concedi il permesso AppOps una volta sola, da PC:
