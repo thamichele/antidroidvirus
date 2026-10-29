@@ -19,6 +19,8 @@ object Blocker {
     fun shizukuGranted(): Boolean =
         shizukuRunning() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
 
+    fun isPackageName(pkg: String) = PACKAGE_NAME.matches(pkg)
+
     /** Va chiamato fuori dal main thread. Ritorna true se almeno una revoca è andata a buon fine. */
     fun revoke(pkg: String, perm: Perm): Boolean {
         // Il nome pacchetto finisce in un comando eseguito come shell: solo caratteri validi.

@@ -5,6 +5,8 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -79,6 +81,112 @@ object Alerts {
             .build()
         notify(context, id, notification)
     }
+
+    fun fileId(path: String) = "$path|file".hashCode()
+
+    fun installId(pkg: String) = "$pkg|install".hashCode()
+
+    /** File scaricato sospetto o pericoloso. */
+    fun file(context: Context, report: FileReport) {
+        val id = fileId(report.path)
+        val reasons = report.findings.joinToString("\n") { "• ${it.text}" }
+        val notification = base(context, CHANNEL_CHECKS, "File scaricato da controllare")
+            .setContentTitle("${report.verdict.title}: ${report.name}")
+            .setContentText(report.findings.firstOrNull()?.text ?: "")
+            .setStyle(Notification.BigTextStyle().bigText("$reasons\n\nNon aprirlo se non sai da dove arriva."))
+            .addAction(action("Elimina", fileAction(context, ActionReceiver.ACTION_DELETE_FILE, report.path, id)))
+            .addAction(action("Ignora", fileAction(context, ActionReceiver.ACTION_IGNORE_FILE, report.path, id)))
+            .build()
+        notify(context, id, notification)
+    }
+
+    /** App appena installata con indizi: se è stata sospesa non si apre finché non la riattivi. */
+    fun installed(context: Context, pkg: String, report: RiskReport, suspended: Boolean) {
+        val label = Apps.label(context, pkg)
+        val id = installId(pkg)
+        val reasons = report.findings.joinToString("\n") { "• ${it.text}" }
+        val builder = base(context, CHANNEL_CHECKS, "App installata da controllare")
+            .setContentTitle(if (suspended) "$label installata e sospesa" else "$label appena installata: da controllare")
+            .setContentText(report.findings.first().text)
+            .setStyle(
+                Notification.BigTextStyle().bigText(
+                    reasons + if (suspended) "\n\nNon si apre finché non la riattivi." else ""
+                )
+            )
+        if (suspended) {
+            builder.addAction(action("Riattiva", broadcast(context, ActionReceiver.ACTION_UNSUSPEND, pkg, null, id)))
+        } else {
+            builder.addAction(action("Va bene", broadcast(context, ActionReceiver.ACTION_TRUST_CHECKS, pkg, null, id)))
+        }
+        builder.addAction(action("Disinstalla", uninstall(context, pkg)))
+        notify(context, id, builder.build())
+    }
+
+    /** Un aggiornamento ha aggiunto permessi pericolosi. */
+    fun update(context: Context, pkg: String, permissions: List<String>) {
+        val label = Apps.label(context, pkg)
+        val id = installId(pkg)
+        val notification = base(context, CHANNEL_CHECKS, "Aggiornamento da controllare")
+            .setContentTitle("$label si è aggiornata e chiede nuovi permessi")
+            .setContentText(permissions.joinToString(", "))
+            .setContentIntent(appSettings(context, pkg))
+            .addAction(action("Impostazioni", appSettings(context, pkg)))
+            .addAction(action("Va bene", broadcast(context, ActionReceiver.ACTION_IGNORE, pkg, null, id)))
+            .build()
+        notify(context, id, notification)
+    }
+
+    /** Un'app fuori dalla lista ha ottenuto il permesso di installare altre app. */
+    fun installer(context: Context, pkg: String) {
+        val label = Apps.label(context, pkg)
+        val id = "$pkg|installer".hashCode()
+        val remove = if (Blocker.shizukuGranted()) {
+            broadcast(context, ActionReceiver.ACTION_REVOKE_INSTALLER, pkg, null, id)
+        } else {
+            PendingIntent.getActivity(
+                context, id,
+                Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.fromParts("package", pkg, null))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                PendingIntent.FLAG_IMMUTABLE,
+            )
+        }
+        val notification = base(context, CHANNEL_CHECKS, "Permesso di installare app")
+            .setContentTitle("$label può installare app")
+            .setContentText("Non è tra le app a cui lo consenti. Un link aperto qui potrebbe installare un'app.")
+            .setStyle(
+                Notification.BigTextStyle().bigText(
+                    "$label non è tra le app a cui consenti di installare. Un link o un file aperto qui potrebbe " +
+                        "installare un'app sul telefono."
+                )
+            )
+            .addAction(action("Togli", remove))
+            .addAction(action("Consenti", broadcast(context, ActionReceiver.ACTION_ALLOW_INSTALLER, pkg, null, id)))
+            .build()
+        notify(context, id, notification)
+    }
+
+    private fun fileAction(context: Context, action: String, path: String, id: Int): PendingIntent {
+        val intent = Intent(context, ActionReceiver::class.java)
+            .setAction(action)
+            .putExtra(EXTRA_PATH, path)
+            .putExtra(EXTRA_NOTIFICATION, id)
+        return PendingIntent.getBroadcast(
+            context, "$action|$id".hashCode(), intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+    }
+
+    fun uninstall(context: Context, pkg: String): PendingIntent = PendingIntent.getActivity(
+        context, "uninstall|$pkg".hashCode(),
+        Intent(Intent.ACTION_DELETE, Uri.fromParts("package", pkg, null)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        PendingIntent.FLAG_IMMUTABLE,
+    )
+
+    private fun appSettings(context: Context, pkg: String): PendingIntent = PendingIntent.getActivity(
+        context, "settings|$pkg".hashCode(),
+        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", pkg, null))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        PendingIntent.FLAG_IMMUTABLE,
+    )
 
     fun dismiss(context: Context, id: Int) {
         context.getSystemService(NotificationManager::class.java).cancel(id)
@@ -155,4 +263,5 @@ object Alerts {
     const val EXTRA_PKG = "pkg"
     const val EXTRA_PERM = "perm"
     const val EXTRA_NOTIFICATION = "notification"
+    const val EXTRA_PATH = "path"
 }

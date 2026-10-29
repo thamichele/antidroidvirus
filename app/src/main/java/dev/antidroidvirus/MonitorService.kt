@@ -25,11 +25,14 @@ class MonitorService : Service() {
     private lateinit var thread: HandlerThread
     private lateinit var handler: Handler
     private lateinit var monitor: Monitor
+    private lateinit var downloads: DownloadWatcher
+    private lateinit var installs: InstallGuard
 
     private val pollNow = Runnable { monitor.poll() }
     private val periodic = object : Runnable {
         override fun run() {
             monitor.poll()
+            installs.checkInstallers()
             val interactive = getSystemService(PowerManager::class.java).isInteractive
             handler.postDelayed(this, if (interactive) INTERVAL_SCREEN_ON_MS else INTERVAL_SCREEN_OFF_MS)
         }
@@ -80,6 +83,8 @@ class MonitorService : Service() {
         thread = HandlerThread("monitor").also { it.start() }
         handler = Handler(thread.looper)
         monitor = Monitor(this)
+        downloads = DownloadWatcher(this, handler).also { it.start() }
+        installs = InstallGuard(this, handler).also { it.start() }
 
         getSystemService(CameraManager::class.java).registerAvailabilityCallback(cameraCallback, handler)
         getSystemService(AudioManager::class.java).registerAudioRecordingCallback(audioCallback, handler)
@@ -111,6 +116,8 @@ class MonitorService : Service() {
         getSystemService(CameraManager::class.java).unregisterAvailabilityCallback(cameraCallback)
         getSystemService(AudioManager::class.java).unregisterAudioRecordingCallback(audioCallback)
         unregisterReceiver(screenReceiver)
+        downloads.stop()
+        installs.stop()
         thread.quitSafely()
         super.onDestroy()
     }
@@ -156,6 +163,13 @@ class MonitorService : Service() {
         @Volatile
         var running = false
             private set
+
+        /** Riavvia il servizio, es. dopo aver concesso l'accesso ai file. */
+        fun restart(context: Context) {
+            if (!isEnabled(context)) return
+            context.stopService(Intent(context, MonitorService::class.java))
+            context.startForegroundService(Intent(context, MonitorService::class.java))
+        }
 
         fun isEnabled(context: Context) =
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_ENABLED, false)
