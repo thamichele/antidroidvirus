@@ -56,8 +56,10 @@ e senza Play Store.
 
 ## Installazione
 
-1. Dal telefono apri la release [**latest**](../../releases/tag/latest) e scarica
-   `antidroidvirus.apk` (viene ricompilato a ogni push).
+1. In F-Droid apri Impostazioni › Repository, tocca **+** e incolla
+   `https://thamichele.github.io/antidroidvirus/repo?fingerprint=52C6192939571634951B82EE34424660F5055BE2EFB8C50280F0DFA772EAE9EB`.
+   Poi installa AntiDroidVirus da F-Droid: gli aggiornamenti arrivano da lì, a ogni push su main.
+   In alternativa scarica `antidroidvirus.apk` dalla release [**latest**](../../releases/tag/latest).
 2. Sul telefono disattiva temporaneamente **Blocco automatico** (Impostazioni › Sicurezza e
    privacy) e installa l'APK.
 3. Concedi il permesso AppOps una volta sola, da PC:
@@ -83,6 +85,11 @@ e senza Play Store.
 - Che il permesso concesso via ADB resti dopo un riavvio.
 - Il rumore: con "Considera fidate le app di sistema" attivo (default) i servizi di sistema e Google
   non generano avvisi, ma restano nel registro.
+
+## Firma
+
+Le build sono firmate con la chiave privata salvata nei secret del repository (`SIGNING_KEYSTORE_BASE64`,
+`SIGNING_PASSWORD`). Senza quei secret la CI compila lo stesso ma non pubblica release né il repository F-Droid.
 
 ## Shizuku (per "Blocca")
 
