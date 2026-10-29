@@ -37,7 +37,7 @@ jobs:
           name: antidroidvirus-apk
           path: app/build/outputs/apk/release/app-release.apk
       - name: Pubblica APK nella release "latest"
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && env.HAS_PRIVATE_KEY == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -47,7 +47,7 @@ jobs:
             --title "Ultima build (${GITHUB_REF_NAME})" \
             --notes "APK compilato da ${GITHUB_SHA}. Aprilo dal telefono e installalo."
       - name: Pubblica APK di prova nella release "anteprima"
-        if: github.ref != 'refs/heads/main' && github.event_name == 'push'
+        if: github.ref != 'refs/heads/main' && github.event_name == 'push' && env.HAS_PRIVATE_KEY == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
