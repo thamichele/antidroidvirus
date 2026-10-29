@@ -40,3 +40,13 @@ jobs:
           gh release create latest antidroidvirus.apk --prerelease --target "$GITHUB_SHA" \
             --title "Ultima build (${GITHUB_REF_NAME})" \
             --notes "APK compilato da ${GITHUB_SHA}. Aprilo dal telefono e installalo."
+      - name: Pubblica APK di prova nella release "anteprima"
+        if: github.ref != 'refs/heads/main' && github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk antidroidvirus-anteprima.apk
+          gh release delete anteprima --yes --cleanup-tag || true
+          gh release create anteprima antidroidvirus-anteprima.apk --prerelease --target "$GITHUB_SHA" \
+            --title "Anteprima (${GITHUB_REF_NAME})" \
+            --notes "APK di prova compilato da ${GITHUB_SHA}, non ancora in main."

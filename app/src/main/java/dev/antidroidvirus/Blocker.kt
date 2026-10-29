@@ -34,15 +34,28 @@ object Blocker {
         return revoked
     }
 
-    private fun exec(vararg command: String): Int = try {
+    fun exec(vararg command: String): Int = try {
+        start(*command).waitFor()
+    } catch (e: Exception) {
+        Log.e(TAG, "Comando fallito: ${command.joinToString(" ")}", e)
+        -1
+    }
+
+    /** Esegue un comando e ne restituisce l'output, o null se fallisce. Va chiamato fuori dal main thread. */
+    fun output(vararg command: String): String? = try {
+        val process = start(*command)
+        val text = process.inputStream.bufferedReader().use { it.readText() }
+        if (process.waitFor() == 0) text else null
+    } catch (e: Exception) {
+        Log.e(TAG, "Comando fallito: ${command.joinToString(" ")}", e)
+        null
+    }
+
+    private fun start(vararg command: String): Process {
         // Shizuku.newProcess è privato dalla API 13 ma resta il modo più semplice di eseguire un comando shell.
         val newProcess = Shizuku::class.java.getDeclaredMethod(
             "newProcess", Array<String>::class.java, Array<String>::class.java, String::class.java,
         ).apply { isAccessible = true }
-        val process = newProcess.invoke(null, arrayOf(*command), null, null) as Process
-        process.waitFor()
-    } catch (e: Exception) {
-        Log.e(TAG, "Comando fallito: ${command.joinToString(" ")}", e)
-        -1
+        return newProcess.invoke(null, arrayOf(*command), null, null) as Process
     }
 }

@@ -4,10 +4,13 @@ import android.content.Context
 
 /**
  * Whitelist per app e per permesso. Ogni voce è "pacchetto|PERMESSO", oppure "pacchetto|*"
- * per fidarsi dell'app su tutti i permessi.
+ * per fidarsi dell'app su tutti i permessi. Due ambiti a parte silenziano le euristiche:
+ * [ANOMALY] gli avvisi di comportamento insolito, [CHECKS] la pagina Controllo.
  */
 object Whitelist {
     const val ALL = "*"
+    const val ANOMALY = "INSOLITO"
+    const val CHECKS = "CONTROLLI"
     private const val PREFS = "whitelist"
     private const val KEY_ENTRIES = "entries"
     private const val KEY_LEGACY_PACKAGES = "packages"
@@ -47,4 +50,8 @@ object Whitelist {
             "$pkg|${perm.name}" in entries ||
             (trustSystemApps(context) && Apps.isSystem(context, pkg))
     }
+
+    fun ignoresAnomalies(context: Context, pkg: String): Boolean = "$pkg|$ANOMALY" in entries(context)
+
+    fun ignoresChecks(context: Context, pkg: String): Boolean = "$pkg|$CHECKS" in entries(context)
 }

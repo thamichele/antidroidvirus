@@ -45,8 +45,21 @@ class MonitorService : Service() {
         }
     }
 
+    // Controllo complessivo delle app ogni 6 ore: legge solo PackageManager, AppOps e statistiche di rete.
+    private val riskCheck = object : Runnable {
+        override fun run() {
+            try {
+                RiskCheck.runAndNotify(this@MonitorService)
+            } catch (e: Exception) {
+                android.util.Log.e("MonitorService", "Controllo app fallito", e)
+            }
+            handler.postDelayed(this, RISK_INTERVAL_MS)
+        }
+    }
+
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
+            ScreenLog.record(context, intent.action == Intent.ACTION_SCREEN_ON)
             handler.removeCallbacks(periodic)
             handler.post(periodic)
         }
@@ -79,7 +92,9 @@ class MonitorService : Service() {
             null,
             handler,
         )
+        ScreenLog.record(this, getSystemService(PowerManager::class.java).isInteractive)
         handler.post(periodic)
+        handler.postDelayed(riskCheck, 30_000)
         started = true
         running = true
     }
@@ -134,6 +149,7 @@ class MonitorService : Service() {
         private const val NOTIFICATION_ID = 1
         private const val INTERVAL_SCREEN_ON_MS = 60_000L
         private const val INTERVAL_SCREEN_OFF_MS = 15 * 60_000L
+        private const val RISK_INTERVAL_MS = 6 * 60 * 60_000L
         private const val PREFS = "service"
         private const val KEY_ENABLED = "enabled"
 

@@ -26,7 +26,27 @@ enum class Perm(
     CONTACTS("Contatti", "i contatti", listOf(AppOpsManager.OPSTR_READ_CONTACTS), listOf(Manifest.permission.READ_CONTACTS)),
     CALL_LOG("Registro chiamate", "il registro chiamate", listOf(AppOpsManager.OPSTR_READ_CALL_LOG), listOf(Manifest.permission.READ_CALL_LOG)),
     SMS("SMS", "gli SMS", listOf(AppOpsManager.OPSTR_READ_SMS), listOf(Manifest.permission.READ_SMS)),
-    CLIPBOARD("Appunti", "gli appunti", listOf("android:read_clipboard"), emptyList(), listOf("READ_CLIPBOARD"));
+    CLIPBOARD("Appunti", "gli appunti", listOf("android:read_clipboard"), emptyList(), listOf("READ_CLIPBOARD")),
+    MEDIA(
+        "Foto e file", "foto, video e file",
+        listOf("android:read_media_images", "android:read_media_video", "android:read_media_audio", "android:read_external_storage"),
+        listOf(
+            "android.permission.READ_MEDIA_IMAGES",
+            "android.permission.READ_MEDIA_VIDEO",
+            "android.permission.READ_MEDIA_AUDIO",
+            Manifest.permission.READ_EXTERNAL_STORAGE,
+        ),
+    ),
+    PHONE("Telefono", "lo stato del telefono", listOf("android:read_phone_state"), listOf(Manifest.permission.READ_PHONE_STATE)),
+    SENSORS("Sensori", "i sensori del corpo", listOf("android:body_sensors"), listOf(Manifest.permission.BODY_SENSORS)),
+    NEARBY(
+        "Dispositivi vicini", "i dispositivi vicini",
+        listOf("android:bluetooth_scan", "android:nearby_wifi_devices"),
+        listOf("android.permission.BLUETOOTH_SCAN", "android.permission.NEARBY_WIFI_DEVICES"),
+    );
+
+    /** Permessi il cui uso a schermo spento è il segnale più forte di spionaggio, anche per le app fidate. */
+    val sensitive: Boolean get() = this == CAMERA || this == MICROPHONE
 
     companion object {
         val allOps: Array<String> = entries.flatMap { it.ops }.toTypedArray()
