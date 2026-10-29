@@ -25,10 +25,41 @@ e senza Play Store.
   Appunti) o per tutti, con ricerca per nome e indice alfabetico laterale.
 - Nessun accesso a internet.
 
+## Comportamenti sospetti (v0.4)
+
+- Ogni uso nel registro dice se è avvenuto in background, a schermo spento, di notte (1-6) o molto più
+  spesso del solito (ultime 24 ore contro la media dei 7 giorni prima).
+- Anche le app in whitelist avvisano se usano fotocamera o microfono di notte a schermo spento, o un
+  permesso con frequenza tripla. "Fidati" su quell'avviso silenzia solo i comportamenti insoliti.
+- Permessi sorvegliati in più: foto e file, telefono, sensori, dispositivi vicini.
+- Pagina **Controllo › App**: punteggio 0-100 per ogni app installata dall'utente, con i motivi. Conta
+  accessi speciali attivi (accessibilità, amministratore, lettore di notifiche, overlay, installazione app,
+  dati di utilizzo), permessi chiesti, app senza icona, provenienza fuori dagli store, firma cambiata, uso di
+  fotocamera e microfono a schermo spento, traffico in background. Sopra 50 arriva una notifica.
+  Il lettore di notifiche si vede solo con Shizuku attivo.
+
+## Protezione preventiva (v0.5)
+
+- **Download**: ogni file che arriva nella cartella Download viene controllato appena finisce di scaricare.
+  Riconosce il tipo vero dai primi byte e lo confronta con l'estensione, poi guarda dentro: APK (permessi,
+  firma, copie di app installate), ZIP e pacchetti XAPK/APKS, PDF (JavaScript, lancio di programmi, allegati,
+  nomi offuscati), Word/Excel/PowerPoint vecchi e nuovi e LibreOffice (macro, oggetti incorporati, modelli
+  remoti), RTF, HTML e SVG (codice, pagine di login finte, HTML smuggling), CSV con formule pericolose,
+  eseguibili Windows e Linux, script, collegamenti .lnk, immagini disco, RAR e 7z. Segnala anche doppie
+  estensioni e caratteri che invertono il nome. Nessuna firma antivirus e nessun accesso a internet:
+  sono controlli sulla struttura, non trovano tutto. I risultati sono in **Controllo › File scaricati**.
+- **App appena installate**: analizzate subito, prima che tu le apra. Se sono sospette e Shizuku è attivo
+  vengono sospese (`pm suspend`) e la notifica offre Riattiva o Disinstalla.
+- **Aggiornamenti**: avviso se un aggiornamento aggiunge permessi pericolosi.
+- **Chi può installare app**: avviso se un'app fuori dalla lista ottiene "Installa app sconosciute", con
+  Togli (via Shizuku, o la pagina di sistema) o Consenti. Di default sono consentite solo F-Droid.
+
 ## Installazione
 
-1. Dal telefono apri la release [**latest**](../../releases/tag/latest) e scarica
-   `antidroidvirus.apk` (viene ricompilato a ogni push).
+1. In F-Droid apri Impostazioni › Repository, tocca **+** e incolla
+   `https://thamichele.github.io/antidroidvirus/repo?fingerprint=52C6192939571634951B82EE34424660F5055BE2EFB8C50280F0DFA772EAE9EB`.
+   Poi installa AntiDroidVirus da F-Droid: gli aggiornamenti arrivano da lì, a ogni push su main.
+   In alternativa scarica `antidroidvirus.apk` dalla release [**latest**](../../releases/tag/latest).
 2. Sul telefono disattiva temporaneamente **Blocco automatico** (Impostazioni › Sicurezza e
    privacy) e installa l'APK.
 3. Concedi il permesso AppOps una volta sola, da PC:
@@ -38,7 +69,13 @@ e senza Play Store.
    ```
 
    oppure dal telefono con il terminale `rish` di Shizuku, togliendo `adb shell`.
-4. Apri l'app, consenti le notifiche e attiva **Monitoraggio**.
+   Facoltativo, per il traffico di rete per app:
+
+   ```
+   adb shell appops set dev.antidroidvirus GET_USAGE_STATS allow
+   ```
+4. Apri l'app, consenti le notifiche e attiva **Monitoraggio**. Per il controllo dei download tocca
+   **Concedi** su "Controllo dei download" e attiva l'accesso a tutti i file.
 5. Metti l'app tra le **App mai in sospensione** (Impostazioni › Batteria › Limiti utilizzo in
    background), altrimenti One UI può chiudere il servizio.
 6. Puoi riattivare Blocco automatico.
@@ -48,6 +85,11 @@ e senza Play Store.
 - Che il permesso concesso via ADB resti dopo un riavvio.
 - Il rumore: con "Considera fidate le app di sistema" attivo (default) i servizi di sistema e Google
   non generano avvisi, ma restano nel registro.
+
+## Firma
+
+Le build sono firmate con la chiave privata salvata nei secret del repository (`SIGNING_KEYSTORE_BASE64`,
+`SIGNING_PASSWORD`). Senza quei secret la CI compila lo stesso ma non pubblica release né il repository F-Droid.
 
 ## Shizuku (per "Blocca")
 

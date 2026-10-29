@@ -6,10 +6,20 @@
     <uses-permission
         android:name="android.permission.GET_APP_OPS_STATS"
         tools:ignore="ProtectedPermissions" />
+    <!-- Concesso una volta via ADB: appops set dev.antidroidvirus GET_USAGE_STATS allow (traffico di rete per app). -->
+    <uses-permission
+        android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
     <uses-permission
         android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Concesso dall'utente in Impostazioni › Accesso speciale: serve per controllare i file in Download. -->
+    <uses-permission
+        android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+        tools:ignore="ScopedStorage" />
+    <!-- Per il pulsante "Disinstalla" nelle notifiche. -->
+    <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />

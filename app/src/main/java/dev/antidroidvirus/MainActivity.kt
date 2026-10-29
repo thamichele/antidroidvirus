@@ -56,6 +56,20 @@ import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Sms
 import androidx.compose.material.icons.outlined.VerifiedUser
 import androidx.compose.material.icons.outlined.Dashboard
+import androidx.compose.material.icons.outlined.Bluetooth
+import androidx.compose.material.icons.outlined.Insights
+import androidx.compose.material.icons.outlined.NightsStay
+import androidx.compose.material.icons.outlined.PhoneAndroid
+import androidx.compose.material.icons.outlined.Photo
+import androidx.compose.material.icons.outlined.Policy
+import androidx.compose.material.icons.outlined.Sensors
+import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.InstallMobile
+import androidx.compose.material.icons.outlined.PauseCircle
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import android.os.Environment
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -139,9 +153,13 @@ fun Perm.icon(): ImageVector = when (this) {
     Perm.CALL_LOG -> Icons.Outlined.Call
     Perm.SMS -> Icons.Outlined.Sms
     Perm.CLIPBOARD -> Icons.Outlined.ContentPaste
+    Perm.MEDIA -> Icons.Outlined.Photo
+    Perm.PHONE -> Icons.Outlined.PhoneAndroid
+    Perm.SENSORS -> Icons.Outlined.Sensors
+    Perm.NEARBY -> Icons.Outlined.Bluetooth
 }
 
-private val TITLES = listOf("Stato", "Registro", "Whitelist")
+private val TITLES = listOf("Stato", "Registro", "Controllo", "Whitelist")
 
 @Composable
 private fun MainScreen() {
@@ -162,11 +180,12 @@ private fun MainScreen() {
             when (tab) {
                 0 -> StatusScreen(tick)
                 1 -> EventLog(tick)
+                2 -> CheckScreen()
                 else -> WhitelistScreen()
             }
         }
         NavigationBar(containerColor = p.panel, tonalElevation = 0.dp, modifier = Modifier.border(1.dp, p.border)) {
-            val items = listOf(Icons.Outlined.Dashboard, Icons.Outlined.History, Icons.Outlined.VerifiedUser)
+            val items = listOf(Icons.Outlined.Dashboard, Icons.Outlined.History, Icons.Outlined.Policy, Icons.Outlined.VerifiedUser)
             for (i in TITLES.indices) {
                 NavigationBarItem(
                     selected = tab == i,
@@ -249,8 +268,13 @@ private fun StatusScreen(tick: Int) {
         EventStore.get(context).recent().filter { it.time >= start }
     }
     val grantCommand = "adb shell pm grant ${context.packageName} ${AppOpsReader.PERMISSION}"
+    val usageAccess = remember(tick) { RiskCheck.hasUsageAccess(context) }
+    val usageCommand = "adb shell appops set ${context.packageName} GET_USAGE_STATS allow"
 
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(
+        Modifier.verticalScroll(rememberScrollState()).padding(bottom = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             StatCard("Usi oggi", today.size.toString(), "registrati", p.text, Modifier.weight(1f))
             StatCard(
@@ -298,6 +322,28 @@ private fun StatusScreen(tick: Int) {
             }
             Divider()
             StatusRow(
+                Icons.Outlined.Insights, "Dati di utilizzo",
+                if (usageAccess) "Concessi: traffico per app attivo" else "Mancanti: niente traffico per app",
+                if (usageAccess) Level.OK else Level.WARN,
+            ) {
+                if (!usageAccess) {
+                    IconButton(onClick = {
+                        context.getSystemService(ClipboardManager::class.java)
+                            .setPrimaryClip(ClipData.newPlainText("comando", usageCommand))
+                    }) { Icon(Icons.Outlined.ContentCopy, "Copia comando", tint = p.text) }
+                }
+            }
+            if (!usageAccess) {
+                Text(
+                    usageCommand,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 12.sp,
+                    color = p.secondary,
+                    modifier = Modifier.padding(start = 52.dp, end = 16.dp, bottom = 10.dp),
+                )
+            }
+            Divider()
+            StatusRow(
                 Icons.Outlined.AdminPanelSettings, "Shizuku per Blocca",
                 when {
                     shizukuGranted -> "Attivo"
@@ -325,6 +371,7 @@ private fun StatusScreen(tick: Int) {
                 }
             }
         }
+        ProtectionPanel(tick)
         Text(
             "Il pulsante rosso in alto spegne subito tutto: servizio, notifiche e avvio automatico.",
             fontSize = 13.sp, color = p.secondary,
@@ -466,7 +513,12 @@ private fun EventLog(tick: Int) {
                             Apps.label(context, event.pkg), fontSize = 15.sp, fontWeight = FontWeight.Medium,
                             color = p.text, maxLines = 1, overflow = TextOverflow.Ellipsis,
                         )
-                        Text("${perm.title} · ${time.format(Date(event.time))}", fontSize = 13.sp, color = p.secondary)
+                        val where = Monitor.describeFlags(event.flags)
+                        Text(
+                            "${perm.title} · ${time.format(Date(event.time))}" + if (where.isEmpty()) "" else " · $where",
+                            fontSize = 13.sp, color = if (where.isEmpty()) p.secondary else p.warn,
+                            maxLines = 2, overflow = TextOverflow.Ellipsis,
+                        )
                     }
                     Tag(if (event.trusted) "fidata" else "avviso", if (event.trusted) p.ok else p.error)
                 }
@@ -594,6 +646,12 @@ private fun WhitelistScreen() {
                                 for (perm in Perm.entries) {
                                     Pill(perm.title, perm.name in scopes, perm.icon()) { toggle(perm.name) }
                                 }
+                                Pill("Comportamenti insoliti", Whitelist.ANOMALY in scopes, Icons.Outlined.NightsStay) {
+                                    toggle(Whitelist.ANOMALY)
+                                }
+                                Pill("Controllo", Whitelist.CHECKS in scopes, Icons.Outlined.Policy) {
+                                    toggle(Whitelist.CHECKS)
+                                }
                             }
                         }
                     }
@@ -687,4 +745,322 @@ private fun installedApps(context: Context): List<AppRow> {
             )
         }
         .sortedWith(compareBy(collator) { it.label })
+}
+
+/** Pagina Controllo: app installate dall'utente ordinate per punteggio di rischio, con i motivi. */
+@Composable
+private fun CheckScreen() {
+    val context = LocalContext.current
+    val p = palette()
+    var reports by remember { mutableStateOf(RiskCheck.lastReports) }
+    var lastRun by remember { mutableStateOf(RiskCheck.lastRun) }
+    var running by remember { mutableStateOf(false) }
+    var showAll by remember { mutableStateOf(false) }
+    var entries by remember { mutableStateOf(Whitelist.entries(context)) }
+    var expanded by remember { mutableStateOf<String?>(null) }
+    var showFiles by remember { mutableStateOf(false) }
+
+    fun analyze() {
+        if (running) return
+        running = true
+        Thread {
+            val result = try {
+                RiskCheck.run(context)
+            } catch (e: Exception) {
+                RiskCheck.lastReports
+            }
+            (context as? Activity)?.runOnUiThread {
+                reports = result
+                lastRun = RiskCheck.lastRun
+                running = false
+            }
+        }.start()
+    }
+    LaunchedEffect(Unit) { if (lastRun == 0L) analyze() }
+
+    Row(Modifier.padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Pill("App", !showFiles, Icons.Outlined.Policy) { showFiles = false }
+        Pill("File scaricati", showFiles, Icons.Outlined.Download) { showFiles = true }
+    }
+    if (showFiles) {
+        FileList()
+        return
+    }
+
+    val visible = reports.filter { report ->
+        val ignored = "${report.pkg}|${Whitelist.CHECKS}" in entries
+        if (showAll) true else !ignored && report.level != RiskLevel.LOW
+    }
+    val time = remember { SimpleDateFormat("HH:mm", Locale.ITALIAN) }
+
+    Row(
+        Modifier.fillMaxWidth().padding(bottom = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Pill("Da guardare", !showAll) { showAll = false }
+        Pill("Tutte", showAll) { showAll = true }
+        Spacer(Modifier.weight(1f))
+        TextButton(onClick = { analyze() }, enabled = !running) {
+            Text(if (running) "Analisi…" else "Analizza", color = p.accent, fontWeight = FontWeight.SemiBold)
+        }
+    }
+    if (lastRun > 0) {
+        Text(
+            "Ultima analisi alle ${time.format(Date(lastRun))} · ${reports.count { it.level == RiskLevel.HIGH }} da controllare",
+            fontSize = 13.sp, color = p.secondary, modifier = Modifier.padding(bottom = 8.dp),
+        )
+    }
+    if (visible.isEmpty()) {
+        Text(
+            if (running) "Analisi delle app in corso…" else "Nessuna app con indizi rilevanti.",
+            fontSize = 15.sp, color = p.secondary,
+        )
+        return
+    }
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
+        items(visible, key = { it.pkg }) { report ->
+            val color = when (report.level) {
+                RiskLevel.HIGH -> p.error
+                RiskLevel.MEDIUM -> p.warn
+                RiskLevel.LOW -> p.secondary
+            }
+            val ignored = "${report.pkg}|${Whitelist.CHECKS}" in entries
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(p.panel)
+                    .border(1.dp, if (expanded == report.pkg) p.accent else p.border, RoundedCornerShape(12.dp))
+                    .clickable { expanded = if (expanded == report.pkg) null else report.pkg }
+                    .padding(horizontal = 14.dp, vertical = 12.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(color.copy(alpha = 0.16f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(report.score.toString(), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = color)
+                    }
+                    Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                        Text(
+                            Apps.label(context, report.pkg), fontSize = 15.sp, fontWeight = FontWeight.Medium,
+                            color = p.text, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            report.findings.first().text, fontSize = 13.sp, color = p.secondary,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    Tag(if (ignored) "va bene" else report.level.title, if (ignored) p.ok else color)
+                }
+                if (expanded == report.pkg) {
+                    Text(
+                        report.pkg, fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = p.secondary,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                    for (finding in report.findings) {
+                        Text("• ${finding.text}", fontSize = 13.sp, color = p.text, modifier = Modifier.padding(top = 4.dp))
+                    }
+                    Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Pill("Va bene così", ignored, Icons.Outlined.VerifiedUser) {
+                            Whitelist.setTrusted(context, report.pkg, Whitelist.CHECKS, !ignored)
+                            if (!ignored) {
+                                RiskCheck.forgetSigner(context, report.pkg)
+                                Alerts.dismiss(context, Alerts.checkId(report.pkg))
+                            }
+                            entries = Whitelist.entries(context)
+                        }
+                        Pill("Impostazioni", false, Icons.Outlined.Tune) {
+                            context.startActivity(
+                                Intent(
+                                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                    android.net.Uri.fromParts("package", report.pkg, null),
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Protezione preventiva: download, app nuove e chi può installare app. */
+@Composable
+private fun ProtectionPanel(tick: Int) {
+    val context = LocalContext.current
+    val p = palette()
+    val filesAccess = remember(tick) { Environment.isExternalStorageManager() }
+    var hadFilesAccess by remember { mutableStateOf(filesAccess) }
+    LaunchedEffect(filesAccess) {
+        // Appena concesso l'accesso ai file, il servizio riparte per iniziare a sorvegliare Download.
+        if (filesAccess && !hadFilesAccess) MonitorService.restart(context)
+        hadFilesAccess = filesAccess
+    }
+    var autoSuspend by remember { mutableStateOf(InstallGuard.autoSuspend(context)) }
+    val shizuku = remember(tick) { Blocker.shizukuGranted() }
+    var allowed by remember { mutableStateOf(InstallGuard.allowedInstallers(context)) }
+    var refresh by remember { mutableIntStateOf(0) }
+    val installers = remember(tick / 5, refresh) { InstallGuard.currentInstallers(context) }
+
+    Text("Protezione preventiva", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = p.text)
+    Panel {
+        StatusRow(
+            Icons.Outlined.Download, "Controllo dei download",
+            if (filesAccess) "Attivo sulla cartella Download" else "Serve l'accesso a tutti i file",
+            if (filesAccess) Level.OK else Level.WARN,
+        ) {
+            if (!filesAccess) {
+                TextButton(onClick = {
+                    context.startActivity(
+                        Intent(
+                            Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                            android.net.Uri.fromParts("package", context.packageName, null),
+                        )
+                    )
+                }) { Text("Concedi", color = p.accent, fontWeight = FontWeight.SemiBold) }
+            }
+        }
+        Divider()
+        StatusRow(
+            Icons.Outlined.PauseCircle, "Sospendi app nuove sospette",
+            when {
+                !autoSuspend -> "Spento: solo avviso"
+                shizuku -> "Prima che tu le apra"
+                else -> "Serve Shizuku attivo"
+            },
+            if (autoSuspend && shizuku) Level.OK else Level.WARN,
+        ) {
+            Switch(
+                checked = autoSuspend,
+                onCheckedChange = { on ->
+                    InstallGuard.setAutoSuspend(context, on)
+                    autoSuspend = on
+                },
+                colors = SwitchDefaults.colors(
+                    checkedTrackColor = p.accent, checkedThumbColor = p.background,
+                    uncheckedTrackColor = p.raised, uncheckedBorderColor = p.border, uncheckedThumbColor = p.secondary,
+                ),
+            )
+        }
+        Divider()
+        StatusRow(
+            Icons.Outlined.InstallMobile, "Possono installare app",
+            if (installers.isEmpty()) "Nessuna app" else "${installers.size} app",
+            if (installers.all { it in allowed }) Level.OK else Level.ERROR,
+        ) {}
+        for (pkg in installers) {
+            val ok = pkg in allowed
+            Row(
+                Modifier.fillMaxWidth().padding(start = 52.dp, end = 16.dp, bottom = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    Apps.label(context, pkg), fontSize = 14.sp, color = p.text,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+                )
+                if (ok) {
+                    Tag("consentita", p.ok)
+                } else {
+                    TextButton(onClick = {
+                        InstallGuard.setInstallerAllowed(context, pkg, true)
+                        allowed = InstallGuard.allowedInstallers(context)
+                    }) { Text("Consenti", color = p.secondary) }
+                }
+                TextButton(onClick = {
+                    InstallGuard.setInstallerAllowed(context, pkg, false)
+                    allowed = InstallGuard.allowedInstallers(context)
+                    if (shizuku) {
+                        Thread {
+                            InstallGuard.revokeInstaller(pkg)
+                            (context as? Activity)?.runOnUiThread { refresh++ }
+                        }.start()
+                    } else {
+                        context.startActivity(
+                            Intent(
+                                Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                                android.net.Uri.fromParts("package", pkg, null),
+                            )
+                        )
+                    }
+                }) { Text("Togli", color = p.error, fontWeight = FontWeight.SemiBold) }
+            }
+        }
+    }
+    Text(
+        "Consiglio: lascia il permesso di installare solo a F-Droid e al file manager con cui installi le APK.",
+        fontSize = 13.sp, color = p.secondary,
+    )
+}
+
+/** File scaricati controllati di recente. */
+@Composable
+private fun FileList() {
+    val context = LocalContext.current
+    val p = palette()
+    var files by remember { mutableStateOf(FileLog.all(context)) }
+    var expanded by remember { mutableStateOf<String?>(null) }
+    val time = remember { SimpleDateFormat("d MMM HH:mm", Locale.ITALIAN) }
+    if (files.isEmpty()) {
+        Text(
+            if (Environment.isExternalStorageManager()) "Nessun file scaricato da quando il controllo è attivo."
+            else "Concedi l'accesso ai file dalla pagina Stato per controllare i download.",
+            fontSize = 15.sp, color = p.secondary,
+        )
+        return
+    }
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
+        items(files, key = { it.path }) { file ->
+            val color = when (file.verdict) {
+                FileVerdict.DANGEROUS -> p.error
+                FileVerdict.SUSPICIOUS -> p.warn
+                FileVerdict.OK -> p.ok
+            }
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(p.panel)
+                    .border(1.dp, if (expanded == file.path) p.accent else p.border, RoundedCornerShape(12.dp))
+                    .clickable { expanded = if (expanded == file.path) null else file.path }
+                    .padding(horizontal = 14.dp, vertical = 12.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            file.name, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = p.text,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            "${time.format(Date(file.time))} · ${file.findings.firstOrNull()?.text ?: "nessun indizio"}",
+                            fontSize = 13.sp, color = p.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    Tag(file.verdict.title, color)
+                }
+                if (expanded == file.path) {
+                    for (finding in file.findings) {
+                        Text("• ${finding.text}", fontSize = 13.sp, color = p.text, modifier = Modifier.padding(top = 4.dp))
+                    }
+                    Text(
+                        "SHA-256 ${file.sha256}", fontSize = 11.sp, fontFamily = FontFamily.Monospace,
+                        color = p.secondary, modifier = Modifier.padding(top = 8.dp),
+                    )
+                    Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Pill("Elimina", false, null) {
+                            if (DownloadWatcher.isInDownloads(file.path) && java.io.File(file.path).delete()) {
+                                FileLog.remove(context, file.path)
+                                files = FileLog.all(context)
+                            }
+                        }
+                        Pill("Copia hash", false, Icons.Outlined.ContentCopy) {
+                            context.getSystemService(ClipboardManager::class.java)
+                                .setPrimaryClip(ClipData.newPlainText("sha256", file.sha256))
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

@@ -18,6 +18,9 @@ class App : Application() {
             NotificationChannel(Alerts.CHANNEL_ALERTS, "Allarmi permessi", NotificationManager.IMPORTANCE_HIGH)
         )
         nm.createNotificationChannel(
+            NotificationChannel(Alerts.CHANNEL_CHECKS, "App da controllare", NotificationManager.IMPORTANCE_DEFAULT)
+        )
+        nm.createNotificationChannel(
             NotificationChannel(MonitorService.CHANNEL_SERVICE, "Monitoraggio attivo", NotificationManager.IMPORTANCE_MIN)
         )
     }

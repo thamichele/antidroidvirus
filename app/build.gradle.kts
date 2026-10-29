@@ -12,19 +12,14 @@ android {
         applicationId = "dev.antidroidvirus"
         minSdk = 30
         targetSdk = 36
-        versionCode = 4
-        versionName = "0.3.0"
+        // Ogni build della CI ha un versionCode più alto della precedente: F-Droid la vede come aggiornamento.
+        versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull()?.plus(100) ?: 6
+        versionName = "0.5.0"
     }
 
     signingConfigs {
-        // Chiave di debug pubblica e fissa (stessa convenzione di webradiodroid): ogni build CI si
-        // installa sopra la precedente. Se i secret SIGNING_* sono impostati si usa la chiave privata.
-        create("ciDebug") {
-            storeFile = file("ci-debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
-        }
+        // Chiave privata dai secret del repository (SIGNING_KEYSTORE_BASE64, SIGNING_PASSWORD).
+        // Senza secret, es. nelle PR da fork, la build release usa la chiave di debug del runner.
         val releaseKeystore = file("release.jks")
         if (releaseKeystore.exists() && System.getenv("SIGNING_PASSWORD") != null) {
             create("private") {
@@ -42,10 +37,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.findByName("private") ?: signingConfigs.getByName("ciDebug")
-        }
-        debug {
-            signingConfig = signingConfigs.getByName("ciDebug")
+            signingConfig = signingConfigs.findByName("private") ?: signingConfigs.getByName("debug")
         }
     }
     compileOptions {
