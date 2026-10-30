@@ -270,6 +270,9 @@ private fun StatusScreen(tick: Int) {
     val grantCommand = "adb shell pm grant ${context.packageName} ${AppOpsReader.PERMISSION}"
     val usageAccess = remember(tick) { RiskCheck.hasUsageAccess(context) }
     val usageCommand = "adb shell appops set ${context.packageName} GET_USAGE_STATS allow"
+    val missing = remember(tick) { Privileges.missing(context) }
+    var granting by remember { mutableStateOf(false) }
+    var grantResult by remember { mutableStateOf<String?>(null) }
 
     Column(
         Modifier.verticalScroll(rememberScrollState()).padding(bottom = 16.dp),
@@ -281,6 +284,42 @@ private fun StatusScreen(tick: Int) {
                 "Avvisi oggi", today.count { !it.trusted }.toString(), "app fuori whitelist",
                 if (today.any { !it.trusted }) p.error else p.text, Modifier.weight(1f),
             )
+        }
+        if (missing && shizukuRunning) {
+            Panel {
+                StatusRow(
+                    Icons.Outlined.AdminPanelSettings, "Permessi senza PC",
+                    when {
+                        granting -> "Concessione in corso…"
+                        grantResult != null -> grantResult!!
+                        shizukuGranted -> "Shizuku può concedere tutto in un tocco"
+                        else -> "Autorizza Shizuku, poi concedi tutto"
+                    },
+                    if (grantResult != null) Level.ERROR else Level.WARN,
+                ) {
+                    TextButton(
+                        enabled = !granting,
+                        onClick = {
+                            if (!shizukuGranted) {
+                                Shizuku.requestPermission(Blocker.SHIZUKU_REQUEST_CODE)
+                            } else {
+                                granting = true
+                                Thread {
+                                    val failed = Privileges.grantAll(context)
+                                    (context as? Activity)?.runOnUiThread {
+                                        granting = false
+                                        grantResult = if (failed.isEmpty()) null else "Non concessi: ${failed.joinToString()}"
+                                        // Il servizio riparte per usare subito i nuovi permessi (es. il controllo dei download).
+                                        MonitorService.restart(context)
+                                    }
+                                }.start()
+                            }
+                        },
+                    ) {
+                        Text(if (shizukuGranted) "Concedi" else "Autorizza", color = p.accent, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
         }
         Panel {
             StatusRow(
@@ -301,7 +340,7 @@ private fun StatusScreen(tick: Int) {
             Divider()
             StatusRow(
                 Icons.Outlined.Key, "Permesso AppOps",
-                if (granted) "Concesso" else "Mancante: esegui il comando via ADB",
+                if (granted) "Concesso" else "Mancante: usa Shizuku o il comando ADB",
                 if (granted) Level.OK else Level.ERROR,
             ) {
                 if (!granted) {
