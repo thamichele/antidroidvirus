@@ -96,6 +96,4 @@ object AppOpsReader {
             }
         }
     }
-
-    fun describe(op: String): String = Perm.fromOp(op)?.label ?: op.removePrefix("android:")
 }

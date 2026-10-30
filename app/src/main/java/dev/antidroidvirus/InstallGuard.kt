@@ -39,7 +39,11 @@ class InstallGuard(private val context: Context, private val handler: Handler) {
 
     private fun onProfile(pkg: String, user: UserHandle, replacing: Boolean) {
         if (user == Process.myUserHandle()) return
-        handler.post { check(pkg, replacing, Profiles.userId(user)) }
+        handler.post {
+            // Scongelare un'app in Shelter arriva come "aggiunta": se la conosciamo già non è un'installazione.
+            val known = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).contains("perms|$pkg")
+            check(pkg, replacing || known, Profiles.userId(user))
+        }
     }
 
     fun start() {
@@ -73,7 +77,21 @@ class InstallGuard(private val context: Context, private val handler: Handler) {
             }
         }
         prefs.edit().putInt(KEY_SEQUENCE, changed?.sequenceNumber ?: maxOf(sequence, 0)).apply()
+        baselineProfiles()
         checkInstallers()
+    }
+
+    /** Le app già presenti nel profilo di lavoro si registrano senza avvisi: contano solo le installazioni future. */
+    private fun baselineProfiles() {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val here = Profiles.installedHere(context)
+        val editor = prefs.edit()
+        for (app in Profiles.apps(context, includeSystem = false)) {
+            if (app.pkg in here || prefs.contains("perms|${app.pkg}")) continue
+            val info = Profiles.packageInfo(context, app.pkg, app.userId, PackageManager.GET_PERMISSIONS) ?: continue
+            editor.putStringSet("perms|${app.pkg}", info.requestedPermissions?.toSet() ?: emptySet())
+        }
+        editor.apply()
     }
 
     /** [profileUser]: utente del profilo di lavoro se l'installazione è avvenuta lì. */

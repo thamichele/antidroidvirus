@@ -166,7 +166,7 @@ object RiskCheck {
         context: Context,
         info: PackageInfo,
         special: Special,
-        hasLauncher: Boolean,
+        hasLauncher: Boolean?,
         installer: String?,
         uid: Int,
         appEvents: List<UsageEvent>,

@@ -141,12 +141,14 @@ object Profiles {
         }
     }
 
-    fun hasLauncher(context: Context, pkg: String, userId: Int): Boolean {
-        val handle = handle(context, userId) ?: return false
+    /** null se non si può sapere, es. profilo in pausa: in quel caso LauncherApps non elenca nulla. */
+    fun hasLauncher(context: Context, pkg: String, userId: Int): Boolean? {
+        val handle = handle(context, userId) ?: return null
         return try {
+            if (context.getSystemService(UserManager::class.java).isQuietModeEnabled(handle)) return null
             context.getSystemService(LauncherApps::class.java).getActivityList(pkg, handle).isNotEmpty()
         } catch (e: Exception) {
-            false
+            null
         }
     }
 
@@ -177,7 +179,11 @@ object Profiles {
         }
     }
 
-    /** Disinstalla l'app solo dal profilo indicato, via Shizuku. Va chiamato fuori dal main thread. */
+    /**
+     * Disinstalla l'app solo dal profilo indicato, via Shizuku. Mai dal profilo principale: lì si passa
+     * dalla finestra di sistema. Va chiamato fuori dal main thread.
+     */
     fun uninstall(pkg: String, userId: Int): Boolean =
-        Blocker.isPackageName(pkg) && Blocker.exec("pm", "uninstall", "--user", userId.toString(), pkg) == 0
+        userId != myUserId() && Blocker.isPackageName(pkg) &&
+            Blocker.exec("pm", "uninstall", "--user", userId.toString(), pkg) == 0
 }
