@@ -62,7 +62,10 @@ e senza Play Store.
    In alternativa scarica `antidroidvirus.apk` dalla release [**latest**](../../releases/tag/latest).
 2. Sul telefono disattiva temporaneamente **Blocco automatico** (Impostazioni › Sicurezza e
    privacy) e installa l'APK.
-3. Concedi il permesso AppOps una volta sola, da PC:
+3. Con Shizuku attivo, apri l'app e tocca **Concedi** su "Permessi senza PC": concede in un colpo
+   permesso AppOps, dati di utilizzo, accesso ai file e batteria senza restrizioni (i passi 4 e 5 non
+   servono più). I permessi restano anche dopo un riavvio con Shizuku spento.
+   Senza Shizuku, concedi il permesso AppOps una volta sola da PC:
 
    ```
    adb shell pm grant dev.antidroidvirus android.permission.GET_APP_OPS_STATS
