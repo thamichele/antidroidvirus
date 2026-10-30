@@ -1,15 +1,16 @@
 # AntiDroidVirus
 
 App Android per uso personale che registra quali app usano posizione, fotocamera, microfono,
-contatti, SMS, registro chiamate e appunti, e avvisa con 3 notifiche quando lo fa un'app
-non in whitelist. Pensata per un Samsung Galaxy S26 Ultra (One UI 9, Android 17), senza root
-e senza Play Store.
+contatti, SMS, registro chiamate, appunti e altri permessi, avvisa quando lo fa un'app non in
+whitelist o quando un'app si comporta in modo insolito, e controlla i file scaricati e le app
+appena installate. Pensata per un Samsung Galaxy S26 Ultra (One UI 9, Android 17), senza root,
+senza PC e senza Play Store.
 
 ## Come funziona
 
 - Legge lo stato AppOps di tutte le app (`AppOpsManager.getPackagesForOps`), che dice per ogni
   app e permesso l'ultimo accesso e se è in uso adesso. Serve il permesso `GET_APP_OPS_STATS`,
-  concesso una volta via ADB.
+  che l'app si concede una volta tramite Shizuku (o via ADB da PC).
 - Le letture sono guidate da eventi: apertura di fotocamera o microfono (callback di sistema),
   accensione dello schermo. In più una lettura ogni 60 secondi a schermo acceso e ogni 15 minuti
   a schermo spento, necessaria per la posizione che non ha callback pubbliche.
@@ -22,7 +23,8 @@ e senza Play Store.
     pagina dei permessi dell'app. Android chiude l'app quando le si revoca un permesso.
   - **Ignora** chiude la notifica.
 - Whitelist per permesso (Posizione, Fotocamera, Microfono, Contatti, Registro chiamate, SMS,
-  Appunti) o per tutti, con ricerca per nome e indice alfabetico laterale.
+  Appunti, Foto e file, Telefono, Sensori, Dispositivi vicini) o per tutti, con ricerca per nome e
+  indice alfabetico laterale.
 - Nessun accesso a internet.
 
 ## Comportamenti sospetti (v0.4)
@@ -56,36 +58,37 @@ e senza Play Store.
 
 ## Installazione
 
+Tutto dal telefono, senza PC.
+
 1. In F-Droid apri Impostazioni › Repository, tocca **+** e incolla
    `https://thamichele.github.io/antidroidvirus/repo?fingerprint=52C6192939571634951B82EE34424660F5055BE2EFB8C50280F0DFA772EAE9EB`.
    Poi installa AntiDroidVirus da F-Droid: gli aggiornamenti arrivano da lì, a ogni push su main.
    In alternativa scarica `antidroidvirus.apk` dalla release [**latest**](../../releases/tag/latest).
-2. Sul telefono disattiva temporaneamente **Blocco automatico** (Impostazioni › Sicurezza e
-   privacy) e installa l'APK.
-3. Con Shizuku attivo, apri l'app e tocca **Concedi** su "Permessi senza PC": concede in un colpo
-   permesso AppOps, dati di utilizzo, accesso ai file e batteria senza restrizioni (i passi 4 e 5 non
-   servono più). I permessi restano anche dopo un riavvio con Shizuku spento.
-   Senza Shizuku, concedi il permesso AppOps una volta sola da PC:
+2. Installa [Shizuku](https://shizuku.rikka.app/) e avvialo con il **debug wireless**
+   (Impostazioni › Opzioni sviluppatore › Debug wireless; la guida è dentro Shizuku).
+3. Apri AntiDroidVirus e consenti le notifiche. Nella pagina **Stato** tocca **Autorizza** su
+   "Permessi senza PC", conferma in Shizuku, poi tocca **Concedi**. L'app si concede da sola:
+   - il permesso AppOps (`GET_APP_OPS_STATS`), che serve al monitoraggio;
+   - i dati di utilizzo (`GET_USAGE_STATS`), per il traffico di rete per app;
+   - l'accesso a tutti i file, per il controllo dei download;
+   - la batteria senza restrizioni, così One UI non chiude il servizio.
+4. Attiva **Monitoraggio**.
 
-   ```
-   adb shell pm grant dev.antidroidvirus android.permission.GET_APP_OPS_STATS
-   ```
+Questi permessi restano anche dopo un riavvio con Shizuku spento. Shizuku serve di nuovo solo per
+le azioni immediate (Blocca, sospendere un'app nuova, togliere il permesso di installare app) e per
+vedere chi legge le notifiche; senza root va riavviato dopo ogni riavvio del telefono.
 
-   oppure dal telefono con il terminale `rish` di Shizuku, togliendo `adb shell`.
-   Facoltativo, per il traffico di rete per app:
+### Senza Shizuku, da PC
 
-   ```
-   adb shell appops set dev.antidroidvirus GET_USAGE_STATS allow
-   ```
-4. Apri l'app, consenti le notifiche e attiva **Monitoraggio**. Per il controllo dei download tocca
-   **Concedi** su "Controllo dei download" e attiva l'accesso a tutti i file.
-5. Metti l'app tra le **App mai in sospensione** (Impostazioni › Batteria › Limiti utilizzo in
-   background), altrimenti One UI può chiudere il servizio.
-6. Puoi riattivare Blocco automatico.
+```
+adb shell pm grant dev.antidroidvirus android.permission.GET_APP_OPS_STATS
+adb shell appops set dev.antidroidvirus GET_USAGE_STATS allow
+```
+
+Accesso ai file e batteria si concedono dalla pagina Stato (pulsanti **Concedi** e **Apri**).
 
 ## Da verificare sul telefono
 
-- Che il permesso concesso via ADB resti dopo un riavvio.
 - Il rumore: con "Considera fidate le app di sistema" attivo (default) i servizi di sistema e Google
   non generano avvisi, ma restano nel registro.
 
@@ -93,12 +96,6 @@ e senza Play Store.
 
 Le build sono firmate con la chiave privata salvata nei secret del repository (`SIGNING_KEYSTORE_BASE64`,
 `SIGNING_PASSWORD`). Senza quei secret la CI compila lo stesso ma non pubblica release né il repository F-Droid.
-
-## Shizuku (per "Blocca")
-
-Installa Shizuku, avvialo con il debug wireless e autorizza AntiDroidVirus dalla schermata
-principale dell'app (o al primo "Blocca"). Senza root Shizuku va riavviato dopo ogni riavvio del
-telefono; il monitoraggio funziona comunque anche senza.
 
 ## Prossimi passi
 
