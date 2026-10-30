@@ -12,6 +12,7 @@ import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
 import android.view.WindowManager
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -43,6 +44,7 @@ import androidx.compose.material.icons.outlined.AdminPanelSettings
 import androidx.compose.material.icons.outlined.BatteryAlert
 import androidx.compose.material.icons.outlined.Call
 import androidx.compose.material.icons.outlined.Contacts
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.ContentPaste
 import androidx.compose.material.icons.outlined.History
@@ -110,8 +112,10 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import rikka.shizuku.Shizuku
 import java.text.Collator
 import java.text.Normalizer
@@ -593,7 +597,8 @@ private fun dayLabel(time: Long): String {
     }
 }
 
-private data class AppRow(val pkg: String, val label: String, val system: Boolean)
+/** [work]: installata solo nel profilo di lavoro di Shelter. La whitelist vale per il pacchetto in tutti i profili. */
+private data class AppRow(val pkg: String, val label: String, val system: Boolean, val work: Boolean = false)
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -605,7 +610,13 @@ private fun WhitelistScreen() {
     var query by remember { mutableStateOf("") }
     var entries by remember { mutableStateOf(Whitelist.entries(context)) }
     var expanded by remember { mutableStateOf<String?>(null) }
-    val allApps = remember { installedApps(context) }
+    var allApps by remember { mutableStateOf(installedApps(context)) }
+    LaunchedEffect(Unit) {
+        // Le app del profilo di lavoro si leggono via Shizuku: fuori dal main thread.
+        val withProfile = withContext(Dispatchers.IO) { installedApps(context) + profileApps(context) }
+        val collator = Collator.getInstance(Locale.ITALIAN)
+        allApps = withProfile.sortedWith(compareBy(collator) { it.label })
+    }
     val apps = remember(query, showSystem, allApps) {
         val q = query.trim()
         allApps.filter {
@@ -666,6 +677,10 @@ private fun WhitelistScreen() {
                                 app.label, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = p.text,
                                 maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
                             )
+                            if (app.work) {
+                                Tag("lavoro", p.secondary)
+                                Spacer(Modifier.width(6.dp))
+                            }
                             TrustIcons(scopes)
                         }
                         if (expanded == app.pkg) {
@@ -786,7 +801,17 @@ private fun installedApps(context: Context): List<AppRow> {
         .sortedWith(compareBy(collator) { it.label })
 }
 
-/** Pagina Controllo: app installate dall'utente ordinate per punteggio di rischio, con i motivi. */
+/** App installate solo nel profilo di lavoro: quelle presenti anche qui sono già nell'elenco. */
+private fun profileApps(context: Context): List<AppRow> {
+    val here = context.packageManager.getInstalledApplications(0).map { it.packageName }.toSet()
+    return Profiles.apps(context, includeSystem = true)
+        .filter { it.pkg !in here && it.pkg != context.packageName }
+        .distinctBy { it.pkg }
+        .map { AppRow(it.pkg, Apps.label(context, it.pkg), it.system, work = true) }
+}
+
+/** Pagina Controllo: app installate dall'utente (anche nel profilo di lavoro) ordinate per rischio, con i motivi. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun CheckScreen() {
     val context = LocalContext.current
@@ -858,7 +883,7 @@ private fun CheckScreen() {
         return
     }
     LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
-        items(visible, key = { it.pkg }) { report ->
+        items(visible, key = { it.key }) { report ->
             val color = when (report.level) {
                 RiskLevel.HIGH -> p.error
                 RiskLevel.MEDIUM -> p.warn
@@ -870,8 +895,8 @@ private fun CheckScreen() {
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
                     .background(p.panel)
-                    .border(1.dp, if (expanded == report.pkg) p.accent else p.border, RoundedCornerShape(12.dp))
-                    .clickable { expanded = if (expanded == report.pkg) null else report.pkg }
+                    .border(1.dp, if (expanded == report.key) p.accent else p.border, RoundedCornerShape(12.dp))
+                    .clickable { expanded = if (expanded == report.key) null else report.key }
                     .padding(horizontal = 14.dp, vertical = 12.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -891,9 +916,13 @@ private fun CheckScreen() {
                             maxLines = 1, overflow = TextOverflow.Ellipsis,
                         )
                     }
+                    if (report.profileUser != null) {
+                        Tag(if (report.frozen) "lavoro · congelata" else "lavoro", p.secondary)
+                        Spacer(Modifier.width(6.dp))
+                    }
                     Tag(if (ignored) "va bene" else report.level.title, if (ignored) p.ok else color)
                 }
-                if (expanded == report.pkg) {
+                if (expanded == report.key) {
                     Text(
                         report.pkg, fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = p.secondary,
                         modifier = Modifier.padding(top = 8.dp),
@@ -901,22 +930,48 @@ private fun CheckScreen() {
                     for (finding in report.findings) {
                         Text("• ${finding.text}", fontSize = 13.sp, color = p.text, modifier = Modifier.padding(top = 4.dp))
                     }
-                    Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FlowRow(
+                        Modifier.padding(top = 10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
                         Pill("Va bene così", ignored, Icons.Outlined.VerifiedUser) {
                             Whitelist.setTrusted(context, report.pkg, Whitelist.CHECKS, !ignored)
                             if (!ignored) {
                                 RiskCheck.forgetSigner(context, report.pkg)
-                                Alerts.dismiss(context, Alerts.checkId(report.pkg))
+                                Alerts.dismiss(context, Alerts.checkId(report.key))
                             }
                             entries = Whitelist.entries(context)
                         }
                         Pill("Impostazioni", false, Icons.Outlined.Tune) {
-                            context.startActivity(
-                                Intent(
-                                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                                    android.net.Uri.fromParts("package", report.pkg, null),
+                            val user = report.profileUser
+                            if (user == null) {
+                                context.startActivity(
+                                    Intent(
+                                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                        android.net.Uri.fromParts("package", report.pkg, null),
+                                    )
                                 )
-                            )
+                            } else if (!Profiles.openSettings(context, report.pkg, user)) {
+                                Toast.makeText(context, "Profilo di lavoro in pausa o non raggiungibile", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                        val user = report.profileUser
+                        if (user != null && Blocker.shizukuGranted()) {
+                            // Toglie l'app solo dal profilo di lavoro, senza passare da Shelter.
+                            Pill("Disinstalla", false, Icons.Outlined.Delete) {
+                                Thread {
+                                    val ok = Profiles.uninstall(report.pkg, user)
+                                    (context as? Activity)?.runOnUiThread {
+                                        Toast.makeText(
+                                            context,
+                                            if (ok) "Disinstallata dal profilo di lavoro" else "Disinstallazione non riuscita",
+                                            Toast.LENGTH_SHORT,
+                                        ).show()
+                                        if (ok) analyze()
+                                    }
+                                }.start()
+                            }
                         }
                     }
                 }

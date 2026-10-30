@@ -38,7 +38,7 @@ object AppOpsReader {
 
     fun read(context: Context): List<OpUsage> {
         val result = ArrayList<OpUsage>()
-        forEachEntry(context, WATCHED_OPS) { pkg, op, entry ->
+        forEachEntry(context, WATCHED_OPS) { pkg, _, op, entry ->
             val entryClass = entry.javaClass
             val running = entryClass.getMethod("isRunning").invoke(entry) as Boolean
             val lastAccess = entryClass
@@ -61,12 +61,14 @@ object AppOpsReader {
     /**
      * Pacchetti per cui una op ha modalità "consentita" (es. overlay, installazione app).
      * AppOps restituisce solo le app con una modalità impostata, che è proprio il caso di un accesso speciale concesso.
+     * Le voci sono per UID: [userId] sceglie il profilo (di default quello principale).
      */
-    fun allowedPackages(context: Context, op: String): Set<String> {
+    fun allowedPackages(context: Context, op: String, userId: Int = Profiles.myUserId()): Set<String> {
         if (!isSupported(op)) return emptySet()
         val result = HashSet<String>()
         try {
-            forEachEntry(context, arrayOf(op)) { pkg, _, entry ->
+            forEachEntry(context, arrayOf(op)) { pkg, uid, _, entry ->
+                if (Profiles.userOf(uid) != userId) return@forEachEntry
                 val mode = entry.javaClass.getMethod("getMode").invoke(entry) as Int
                 if (mode == AppOpsManager.MODE_ALLOWED) result += pkg
             }
@@ -76,7 +78,7 @@ object AppOpsReader {
         return result
     }
 
-    private inline fun forEachEntry(context: Context, ops: Array<String>, block: (String, String, Any) -> Unit) {
+    private inline fun forEachEntry(context: Context, ops: Array<String>, block: (String, Int, String, Any) -> Unit) {
         val aom = context.getSystemService(AppOpsManager::class.java)
         val getPackagesForOps = AppOpsManager::class.java
             .getMethod("getPackagesForOps", Array<String>::class.java)
@@ -85,11 +87,12 @@ object AppOpsReader {
             if (pkgOps == null) continue
             val pkgClass = pkgOps.javaClass
             val pkg = pkgClass.getMethod("getPackageName").invoke(pkgOps) as String
+            val uid = pkgClass.getMethod("getUid").invoke(pkgOps) as Int
             val entries = pkgClass.getMethod("getOps").invoke(pkgOps) as List<*>
             for (entry in entries) {
                 if (entry == null) continue
                 val op = entry.javaClass.getMethod("getOpStr").invoke(entry) as String
-                block(pkg, op, entry)
+                block(pkg, uid, op, entry)
             }
         }
     }

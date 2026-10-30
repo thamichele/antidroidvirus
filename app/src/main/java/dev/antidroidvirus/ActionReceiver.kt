@@ -38,16 +38,22 @@ class ActionReceiver : BroadcastReceiver() {
                 RiskCheck.forgetSigner(context, pkg)
             }
             ACTION_ALLOW_INSTALLER -> InstallGuard.setInstallerAllowed(context, pkg, true)
-            ACTION_UNSUSPEND, ACTION_REVOKE_INSTALLER -> {
+            ACTION_UNSUSPEND, ACTION_REVOKE_INSTALLER, ACTION_UNINSTALL_PROFILE -> {
                 // I comandi Shizuku non vanno eseguiti sul main thread.
                 val pending = goAsync()
                 val app = context.applicationContext
+                val user = intent.getIntExtra(Alerts.EXTRA_USER, -1).takeIf { it >= 0 }
                 Thread {
-                    val ok = if (intent.action == ACTION_UNSUSPEND) InstallGuard.unsuspend(pkg) else InstallGuard.revokeInstaller(pkg)
                     val label = Apps.label(app, pkg)
+                    val ok = when (intent.action) {
+                        ACTION_UNSUSPEND -> InstallGuard.unsuspend(pkg, user)
+                        ACTION_UNINSTALL_PROFILE -> user != null && Profiles.uninstall(pkg, user)
+                        else -> InstallGuard.revokeInstaller(pkg)
+                    }
                     val message = when {
                         !ok -> "Shizuku non disponibile: operazione non riuscita"
                         intent.action == ACTION_UNSUSPEND -> "$label riattivata"
+                        intent.action == ACTION_UNINSTALL_PROFILE -> "$label disinstallata dal profilo di lavoro"
                         else -> "$label non può più installare app"
                     }
                     android.os.Handler(android.os.Looper.getMainLooper()).post {
@@ -71,5 +77,6 @@ class ActionReceiver : BroadcastReceiver() {
         const val ACTION_UNSUSPEND = "dev.antidroidvirus.UNSUSPEND"
         const val ACTION_REVOKE_INSTALLER = "dev.antidroidvirus.REVOKE_INSTALLER"
         const val ACTION_ALLOW_INSTALLER = "dev.antidroidvirus.ALLOW_INSTALLER"
+        const val ACTION_UNINSTALL_PROFILE = "dev.antidroidvirus.UNINSTALL_PROFILE"
     }
 }
