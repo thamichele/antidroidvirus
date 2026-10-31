@@ -1,13 +1,10 @@
+# Nome, descrizioni, changelog e immagini sono in dev.antidroidvirus/it/ (formato fastlane).
 Categories:
   - Security
+  - System
 AuthorName: Michele
-Name: AntiDroidVirus
-Summary: Registra e segnala l'uso dei permessi e le app sospette
-Description: |-
-  App per uso personale: registra quali app usano posizione, fotocamera, microfono,
-  contatti, SMS e altri permessi, segnala i comportamenti insoliti, dà un punteggio
-  di rischio alle app installate e controlla i file scaricati e le app appena installate.
-
-  Richiede il permesso GET_APP_OPS_STATS concesso una volta via ADB. Shizuku è facoltativo.
+AuthorWebSite: https://github.com/thamichele
+WebSite: https://github.com/thamichele/antidroidvirus
 SourceCode: https://github.com/thamichele/antidroidvirus
 IssueTracker: https://github.com/thamichele/antidroidvirus/issues
+Changelog: https://github.com/thamichele/antidroidvirus/commits/main

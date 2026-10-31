@@ -1,0 +1,34 @@
+AntiDroidVirus tiene d'occhio quello che fanno le altre app sul telefono, senza root e senza accesso a internet.
+
+<b>Registro dei permessi</b>
+<ul>
+<li>Registra quali app usano posizione, fotocamera, microfono, contatti, SMS, registro chiamate, appunti, foto e file, telefono, sensori e dispositivi vicini.</li>
+<li>Avvisa quando lo fa un'app non in whitelist. Dalla notifica: <i>Fidati</i>, <i>Blocca</i> (revoca il permesso via Shizuku) o <i>Ignora</i>.</li>
+<li>Segnala gli usi insoliti: in background, a schermo spento, di notte o molto più spesso del solito, anche per le app fidate.</li>
+</ul>
+
+<b>Controllo delle app</b>
+<ul>
+<li>Punteggio di rischio da 0 a 100 per ogni app installata, con i motivi: accessi speciali, permessi, provenienza, firma cambiata, traffico in background.</li>
+<li>Le app appena installate vengono analizzate subito; se sono sospette e Shizuku è attivo vengono sospese prima che tu le apra.</li>
+<li>Avviso se un aggiornamento aggiunge permessi pericolosi o se un'app ottiene il permesso di installare altre app.</li>
+</ul>
+
+<b>Controllo dei download</b>
+<ul>
+<li>Ogni file scaricato viene esaminato appena finisce: APK, archivi, PDF, documenti Office e LibreOffice, HTML e SVG, script, eseguibili, doppie estensioni e nomi ingannevoli.</li>
+<li>Sono controlli sulla struttura, non firme antivirus: non trovano tutto.</li>
+</ul>
+
+<b>Profilo di lavoro</b>
+<ul>
+<li>Vede anche le app del profilo di lavoro creato da Shelter, comprese le copie doppie con permessi propri.</li>
+</ul>
+
+<b>Requisiti</b>
+<ul>
+<li>Il permesso GET_APP_OPS_STATS, concesso una volta tramite Shizuku o via ADB da PC. Resta anche dopo un riavvio.</li>
+<li>Shizuku serve di nuovo solo per le azioni immediate, come bloccare o sospendere un'app.</li>
+</ul>
+
+App per uso personale, distribuita dal repository F-Droid dell'autore.

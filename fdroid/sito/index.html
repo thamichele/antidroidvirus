@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<!-- Pagina del repository F-Droid. La CI sostituisce @@REPO@@, @@IMPRONTA@@ e @@VERSIONE@@ e la copia in
+     site/index.html e site/repo/index.html, così si vede sia aprendo il sito sia aprendo l'indirizzo del repository. -->
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AntiDroidVirus · repository F-Droid</title>
+  <meta name="description" content="Repository F-Droid personale di AntiDroidVirus: registra l'uso dei permessi e segnala app e download sospetti.">
+  <meta name="robots" content="noindex">
+  <link rel="icon" type="image/png" href="@@REPO@@/icons/icon.png">
+  <style>
+    :root { --bg: #F6F4EF; --panel: #FFFFFF; --raised: #EFECE6; --border: #DDD8CF; --text: #22201D;
+            --secondary: #6B665E; --accent: #B4572F; --ok: #2F7D71; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #1C1B1A; --panel: #252422; --raised: #2E2C2A; --border: #3A3734; --text: #EDEAE3;
+              --secondary: #A39E95; --accent: #E3845A; --ok: #5DB3A6; }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 Inter, system-ui, sans-serif; }
+    main { max-width: 640px; margin: 0 auto; padding: 40px 20px 56px; }
+    header { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
+    header img { width: 64px; height: 64px; }
+    h1 { font-size: 26px; margin: 0; letter-spacing: -.3px; }
+    h1 .pill { vertical-align: 5px; letter-spacing: 0; }
+    header p { margin: 2px 0 0; color: var(--secondary); }
+    .pill { display: inline-block; font-size: 13px; font-weight: 600; padding: 2px 10px; border-radius: 999px;
+            background: var(--raised); border: 1px solid var(--border); color: var(--secondary); }
+    section { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 20px; margin-bottom: 16px; }
+    h2 { font-size: 16px; margin: 0 0 12px; }
+    ol { margin: 0; padding-left: 20px; } li + li { margin-top: 6px; }
+    .button { display: inline-block; background: var(--accent); color: #fff; text-decoration: none; font-weight: 600;
+              padding: 10px 20px; border-radius: 999px; margin: 4px 0 14px; }
+    code { display: block; font: 13px/1.45 "JetBrains Mono", ui-monospace, monospace; word-break: break-all;
+           background: var(--raised); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+    .qr { display: flex; gap: 16px; align-items: center; margin-top: 14px; color: var(--secondary); font-size: 14px; }
+    .qr span { min-width: 0; overflow-wrap: anywhere; }
+    .qr img { width: 120px; height: 120px; border-radius: 8px; background: #fff; padding: 6px; flex: none; }
+    a { color: var(--accent); }
+    footer { color: var(--secondary); font-size: 14px; text-align: center; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <img src="@@REPO@@/icons/icon.png" alt="">
+    <div>
+      <h1>AntiDroidVirus <span class="pill">v@@VERSIONE@@</span></h1>
+      <p>Repository F-Droid personale di Michele</p>
+    </div>
+  </header>
+
+  <section>
+    <h2>Aggiungi il repository</h2>
+    <a class="button" href="fdroidrepos://@@REPO_SENZA_SCHEMA@@?fingerprint=@@IMPRONTA@@">Apri in F-Droid</a>
+    <ol>
+      <li>Dal telefono tocca <b>Apri in F-Droid</b>, oppure in F-Droid vai in Impostazioni › Repository, tocca <b>+</b> e incolla:
+        <code>@@REPO@@?fingerprint=@@IMPRONTA@@</code></li>
+      <li>Installa AntiDroidVirus da F-Droid: gli aggiornamenti arrivano da qui.</li>
+    </ol>
+    <div class="qr">
+      <img src="@@REPO@@/index.png" alt="Codice QR del repository">
+      <span>Da un altro dispositivo, inquadra il codice con F-Droid.<br>Impronta della chiave (SHA-256):<br>@@IMPRONTA@@</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>Cosa fa</h2>
+    Registra quali app usano posizione, fotocamera, microfono e gli altri permessi, avvisa per le app non in
+    whitelist e per i comportamenti insoliti, dà un punteggio di rischio alle app installate e controlla i file
+    scaricati e le app appena installate. Senza root e senza accesso a internet.
+  </section>
+
+  <footer>
+    <a href="https://github.com/thamichele/antidroidvirus">Codice sorgente su GitHub</a> ·
+    <a href="https://github.com/thamichele/antidroidvirus/releases/tag/latest">Scarica l'APK</a>
+  </footer>
+</main>
+</body>
+</html>
