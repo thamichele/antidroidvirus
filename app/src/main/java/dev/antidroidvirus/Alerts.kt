@@ -27,7 +27,8 @@ object Alerts {
 
     fun anomalyId(pkg: String, perm: Perm) = "$pkg|${perm.name}|anomaly".hashCode()
 
-    fun checkId(pkg: String) = "$pkg|check".hashCode()
+    /** [key] è [RiskReport.key]: il pacchetto, con l'utente se l'app è nel profilo di lavoro. */
+    fun checkId(key: String) = "$key|check".hashCode()
 
     fun alert(context: Context, pkg: String, perm: Perm, time: Long, flags: Int = 0) {
         if (!cooledDown("$pkg|${perm.name}")) return
@@ -69,8 +70,8 @@ object Alerts {
 
     /** Un'app ha superato la soglia della pagina Controllo. */
     fun check(context: Context, pkg: String, report: RiskReport) {
-        val label = Apps.label(context, pkg)
-        val id = checkId(pkg)
+        val label = Apps.label(context, pkg) + if (report.profileUser != null) " (lavoro)" else ""
+        val id = checkId(report.key)
         val reasons = report.findings.joinToString("\n") { "• ${it.text}" }
         val notification = base(context, CHANNEL_CHECKS, "App da controllare")
             .setContentTitle("$label è da controllare")
@@ -102,8 +103,9 @@ object Alerts {
 
     /** App appena installata con indizi: se è stata sospesa non si apre finché non la riattivi. */
     fun installed(context: Context, pkg: String, report: RiskReport, suspended: Boolean) {
-        val label = Apps.label(context, pkg)
-        val id = installId(pkg)
+        val user = report.profileUser
+        val label = Apps.label(context, pkg) + if (user != null) " (lavoro)" else ""
+        val id = installId(report.key)
         val reasons = report.findings.joinToString("\n") { "• ${it.text}" }
         val builder = base(context, CHANNEL_CHECKS, "App installata da controllare")
             .setContentTitle(if (suspended) "$label installata e sospesa" else "$label appena installata: da controllare")
@@ -114,11 +116,17 @@ object Alerts {
                 )
             )
         if (suspended) {
-            builder.addAction(action("Riattiva", broadcast(context, ActionReceiver.ACTION_UNSUSPEND, pkg, null, id)))
+            builder.addAction(action("Riattiva", broadcast(context, ActionReceiver.ACTION_UNSUSPEND, pkg, null, id, user)))
         } else {
             builder.addAction(action("Va bene", broadcast(context, ActionReceiver.ACTION_TRUST_CHECKS, pkg, null, id)))
         }
-        builder.addAction(action("Disinstalla", uninstall(context, pkg)))
+        // Nel profilo di lavoro la finestra di sistema non può disinstallare: lo fa Shizuku.
+        val remove = if (user == null) {
+            uninstall(context, pkg)
+        } else {
+            broadcast(context, ActionReceiver.ACTION_UNINSTALL_PROFILE, pkg, null, id, user)
+        }
+        builder.addAction(action("Disinstalla", remove))
         notify(context, id, builder.build())
     }
 
@@ -236,12 +244,15 @@ object Alerts {
         context, 0, Intent(context, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE,
     )
 
-    fun broadcast(context: Context, action: String, pkg: String, perm: Perm?, notificationId: Int): PendingIntent {
+    fun broadcast(
+        context: Context, action: String, pkg: String, perm: Perm?, notificationId: Int, profileUser: Int? = null,
+    ): PendingIntent {
         val intent = Intent(context, ActionReceiver::class.java)
             .setAction(action)
             .putExtra(EXTRA_PKG, pkg)
             .putExtra(EXTRA_PERM, perm?.name)
             .putExtra(EXTRA_NOTIFICATION, notificationId)
+        if (profileUser != null) intent.putExtra(EXTRA_USER, profileUser)
         return PendingIntent.getBroadcast(
             context, "$action|$notificationId".hashCode(), intent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
@@ -264,4 +275,5 @@ object Alerts {
     const val EXTRA_PERM = "perm"
     const val EXTRA_NOTIFICATION = "notification"
     const val EXTRA_PATH = "path"
+    const val EXTRA_USER = "user"
 }

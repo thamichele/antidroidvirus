@@ -10,7 +10,15 @@ import java.security.cert.X509Certificate
 
 data class Finding(val text: String, val weight: Int)
 
-data class RiskReport(val pkg: String, val findings: List<Finding>) {
+data class RiskReport(
+    val pkg: String,
+    val findings: List<Finding>,
+    /** Utente del profilo di lavoro (Shelter) se l'app è lì, null se è nel profilo principale. */
+    val profileUser: Int? = null,
+    val frozen: Boolean = false,
+) {
+    /** Chiave unica: la stessa app può comparire sia nel profilo principale sia in quello di lavoro. */
+    val key: String get() = if (profileUser == null) pkg else "$pkg@$profileUser"
     val score: Int get() = findings.sumOf { it.weight }.coerceAtMost(100)
     val level: RiskLevel get() = when {
         score >= RiskLevel.HIGH.threshold -> RiskLevel.HIGH

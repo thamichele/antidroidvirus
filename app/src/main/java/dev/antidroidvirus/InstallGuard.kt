@@ -4,8 +4,11 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.LauncherApps
 import android.content.pm.PackageManager
 import android.os.Handler
+import android.os.Process
+import android.os.UserHandle
 
 /**
  * Protezione all'installazione:
@@ -13,6 +16,9 @@ import android.os.Handler
  *   finché non la avvii la prima volta) e, se è sospetta e Shizuku è attivo, viene sospesa;
  * - un aggiornamento che aggiunge permessi pericolosi viene segnalato;
  * - solo le app nella lista possono avere il permesso "Installa app sconosciute".
+ *
+ * Le installazioni nel profilo di lavoro di Shelter arrivano da LauncherApps, che avvisa dei cambiamenti
+ * negli altri profili dell'utente.
  */
 class InstallGuard(private val context: Context, private val handler: Handler) {
     private val receiver = object : BroadcastReceiver() {
@@ -23,7 +29,25 @@ class InstallGuard(private val context: Context, private val handler: Handler) {
         }
     }
 
+    private val profileCallback = object : LauncherApps.Callback() {
+        override fun onPackageAdded(packageName: String, user: UserHandle) = onProfile(packageName, user, false)
+        override fun onPackageChanged(packageName: String, user: UserHandle) = onProfile(packageName, user, true)
+        override fun onPackageRemoved(packageName: String, user: UserHandle) {}
+        override fun onPackagesAvailable(packageNames: Array<String>, user: UserHandle, replacing: Boolean) {}
+        override fun onPackagesUnavailable(packageNames: Array<String>, user: UserHandle, replacing: Boolean) {}
+    }
+
+    private fun onProfile(pkg: String, user: UserHandle, replacing: Boolean) {
+        if (user == Process.myUserHandle()) return
+        handler.post {
+            // Scongelare un'app in Shelter arriva come "aggiunta": se la conosciamo già non è un'installazione.
+            val known = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).contains("perms|$pkg")
+            check(pkg, replacing || known, Profiles.userId(user))
+        }
+    }
+
     fun start() {
+        context.getSystemService(LauncherApps::class.java).registerCallback(profileCallback, handler)
         context.registerReceiver(
             receiver,
             IntentFilter().apply {
@@ -37,6 +61,7 @@ class InstallGuard(private val context: Context, private val handler: Handler) {
     }
 
     fun stop() {
+        context.getSystemService(LauncherApps::class.java).unregisterCallback(profileCallback)
         context.unregisterReceiver(receiver)
     }
 
@@ -52,16 +77,37 @@ class InstallGuard(private val context: Context, private val handler: Handler) {
             }
         }
         prefs.edit().putInt(KEY_SEQUENCE, changed?.sequenceNumber ?: maxOf(sequence, 0)).apply()
+        baselineProfiles()
         checkInstallers()
     }
 
-    fun check(pkg: String, replacing: Boolean) {
+    /** Le app già presenti nel profilo di lavoro si registrano senza avvisi: contano solo le installazioni future. */
+    private fun baselineProfiles() {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val here = Profiles.installedHere(context)
+        val editor = prefs.edit()
+        for (app in Profiles.apps(context, includeSystem = false)) {
+            if (app.pkg in here || prefs.contains("perms|${app.pkg}")) continue
+            val info = Profiles.packageInfo(context, app.pkg, app.userId, PackageManager.GET_PERMISSIONS) ?: continue
+            editor.putStringSet("perms|${app.pkg}", info.requestedPermissions?.toSet() ?: emptySet())
+        }
+        editor.apply()
+    }
+
+    /** [profileUser]: utente del profilo di lavoro se l'installazione è avvenuta lì. */
+    fun check(pkg: String, replacing: Boolean, profileUser: Int? = null) {
         if (pkg == context.packageName || !Blocker.isPackageName(pkg)) return
         val pm = context.packageManager
-        val info = try {
-            pm.getPackageInfo(pkg, AppAnalyzer.FLAGS)
-        } catch (e: PackageManager.NameNotFoundException) {
-            return
+        val info = if (profileUser == null) {
+            try {
+                pm.getPackageInfo(pkg, AppAnalyzer.FLAGS)
+            } catch (e: PackageManager.NameNotFoundException) {
+                return
+            }
+        } else {
+            // Un'app presente anche nel profilo principale ha lo stesso APK, già controllato lì (es. clonata da Shelter).
+            if (Profiles.installedHere(context).contains(pkg)) return
+            Profiles.packageInfo(context, pkg, profileUser, AppAnalyzer.FLAGS) ?: return
         }
         if (Apps.isSystem(context, pkg)) return
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -79,21 +125,30 @@ class InstallGuard(private val context: Context, private val handler: Handler) {
         }
 
         val findings = ArrayList<Finding>()
-        findings += AppAnalyzer.analyze(info, AppAnalyzer.hasLauncher(context, pkg))
-        val installer = try {
-            pm.getInstallSourceInfo(pkg).installingPackageName
-        } catch (e: Exception) {
-            null
+        val hasLauncher = if (profileUser == null) {
+            AppAnalyzer.hasLauncher(context, pkg)
+        } else {
+            Profiles.hasLauncher(context, pkg, profileUser)
+        }
+        findings += AppAnalyzer.analyze(info, hasLauncher)
+        val installer = if (profileUser == null) {
+            try {
+                pm.getInstallSourceInfo(pkg).installingPackageName
+            } catch (e: Exception) {
+                null
+            }
+        } else {
+            Profiles.installer(profileUser, pkg)
         }
         if (installer != null && installer !in AppAnalyzer.TRUSTED_INSTALLERS) {
             findings += Finding("Installata fuori dagli store, da ${Apps.label(context, installer)}", 15)
         }
         findings += lookalike(pkg)
-        val report = RiskReport(pkg, findings.sortedByDescending { it.weight })
+        val report = RiskReport(pkg, findings.sortedByDescending { it.weight }, profileUser)
         if (report.level == RiskLevel.LOW) return
 
         val suspend = report.level == RiskLevel.HIGH && autoSuspend(context) && Blocker.shizukuGranted() &&
-            Blocker.exec("pm", "suspend", pkg) == 0
+            Blocker.exec("pm", "suspend", *userArgs(profileUser), pkg) == 0
         Alerts.installed(context, pkg, report, suspend)
     }
 
@@ -160,7 +215,12 @@ class InstallGuard(private val context: Context, private val handler: Handler) {
         fun revokeInstaller(pkg: String): Boolean =
             Blocker.isPackageName(pkg) && Blocker.exec("appops", "set", pkg, "REQUEST_INSTALL_PACKAGES", "default") == 0
 
-        fun unsuspend(pkg: String): Boolean = Blocker.isPackageName(pkg) && Blocker.exec("pm", "unsuspend", pkg) == 0
+        fun unsuspend(pkg: String, profileUser: Int? = null): Boolean =
+            Blocker.isPackageName(pkg) && Blocker.exec("pm", "unsuspend", *userArgs(profileUser), pkg) == 0
+
+        /** "--user N" per i comandi pm che riguardano un'app del profilo di lavoro. */
+        fun userArgs(profileUser: Int?): Array<String> =
+            if (profileUser == null) emptyArray() else arrayOf("--user", profileUser.toString())
 
         fun autoSuspend(context: Context): Boolean =
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_AUTO_SUSPEND, true)

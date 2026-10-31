@@ -56,6 +56,20 @@ senza PC e senza Play Store.
 - **Chi può installare app**: avviso se un'app fuori dalla lista ottiene "Installa app sconosciute", con
   Togli (via Shizuku, o la pagina di sistema) o Consenti. Di default sono consentite solo F-Droid.
 
+## Profilo di lavoro (Shelter)
+
+- Anche le app del profilo di lavoro creato da Shelter compaiono in **Controllo › App** (con l'etichetta
+  "lavoro", e "congelata" se Shelter le ha congelate) e nella whitelist.
+- Un pacchetto è installato una sola volta sul telefono: un'app presente in entrambi i profili ha lo stesso
+  APK, quindi del profilo di lavoro contano solo gli accessi speciali attivi lì (accessibilità, lettore di
+  notifiche, overlay, installazione app, dati di utilizzo). Le app che stanno solo nel profilo di lavoro
+  ricevono l'analisi completa. Shelter, che amministra il profilo, non viene segnalato per questo.
+- Le app installate nel profilo di lavoro vengono analizzate subito, come quelle del profilo principale;
+  con Shizuku attivo quelle sospette vengono sospese, e **Disinstalla** le toglie solo dal profilo di lavoro.
+- Con Shizuku attivo l'elenco è completo (anche app senza icona e app congelate). Senza Shizuku si vedono le
+  app con un'icona e quelle presenti sul telefono ma non installate nel profilo principale.
+- Se il profilo di lavoro è in pausa, le app restano analizzabili ma le impostazioni dell'app non si aprono.
+
 ## Installazione
 
 Tutto dal telefono, senza PC.
