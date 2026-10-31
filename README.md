@@ -69,6 +69,11 @@ senza PC e senza Play Store.
 - Con Shizuku attivo l'elenco è completo (anche app senza icona e app congelate). Senza Shizuku si vedono le
   app con un'icona e quelle presenti sul telefono ma non installate nel profilo principale.
 - Se il profilo di lavoro è in pausa, le app restano analizzabili ma le impostazioni dell'app non si aprono.
+- Ogni app porta l'etichetta del profilo: **principale**, **lavoro** o **entrambi** (whitelist). Un'app installata
+  in tutti e due i profili è una copia doppia con permessi propri: in Controllo compare due volte, ognuna con i
+  suoi accessi speciali, i permessi concessi (nel profilo di lavoro si leggono via Shizuku, `dumpsys package`)
+  e gli usi registrati; nel Registro e negli avvisi la copia di lavoro è segnata "(lavoro)" e **Blocca** revoca
+  il permesso solo a quella copia (`pm revoke --user`). La whitelist resta per pacchetto, cioè per entrambe le copie.
 
 ## Informazioni
 

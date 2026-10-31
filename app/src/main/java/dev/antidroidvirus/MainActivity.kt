@@ -645,7 +645,7 @@ private fun EventLog(tick: Int) {
                     PermBadge(perm, if (event.trusted) p.secondary else p.error)
                     Column(Modifier.weight(1f).padding(start = 12.dp)) {
                         Text(
-                            Apps.label(context, event.pkg), fontSize = 15.sp, fontWeight = FontWeight.Medium,
+                            Alerts.labelOf(context, event.pkg, event.user), fontSize = 15.sp, fontWeight = FontWeight.Medium,
                             color = p.text, maxLines = 1, overflow = TextOverflow.Ellipsis,
                         )
                         val where = Monitor.describeFlags(event.flags)
@@ -689,8 +689,14 @@ private fun dayLabel(time: Long): String {
     }
 }
 
-/** [work]: installata solo nel profilo di lavoro di Shelter. La whitelist vale per il pacchetto in tutti i profili. */
-private data class AppRow(val pkg: String, val label: String, val system: Boolean, val work: Boolean = false)
+/** In quali profili è installata. La whitelist vale per il pacchetto in tutti i profili. */
+private data class AppRow(val pkg: String, val label: String, val system: Boolean, val main: Boolean, val work: Boolean) {
+    val where: String get() = when {
+        main && work -> "entrambi"
+        work -> "lavoro"
+        else -> "principale"
+    }
+}
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -705,9 +711,7 @@ private fun WhitelistScreen() {
     var allApps by remember { mutableStateOf(installedApps(context)) }
     LaunchedEffect(Unit) {
         // Le app del profilo di lavoro si leggono via Shizuku: fuori dal main thread.
-        val withProfile = withContext(Dispatchers.IO) { installedApps(context) + profileApps(context) }
-        val collator = Collator.getInstance(Locale.ITALIAN)
-        allApps = withProfile.sortedWith(compareBy(collator) { it.label })
+        allApps = withContext(Dispatchers.IO) { installedApps(context, Profiles.apps(context, includeSystem = true)) }
     }
     val apps = remember(query, showSystem, allApps) {
         val q = query.trim()
@@ -769,14 +773,18 @@ private fun WhitelistScreen() {
                                 app.label, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = p.text,
                                 maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
                             )
-                            if (app.work) {
-                                Tag("lavoro", p.secondary)
-                                Spacer(Modifier.width(6.dp))
-                            }
+                            Tag(app.where, if (app.work) p.accent else p.secondary)
+                            Spacer(Modifier.width(6.dp))
                             TrustIcons(scopes)
                         }
                         if (expanded == app.pkg) {
                             Text(app.pkg, fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = p.secondary)
+                            if (app.main && app.work) {
+                                Text(
+                                    "Installata in entrambi i profili: la fiducia vale per tutte e due le copie.",
+                                    fontSize = 12.sp, color = p.secondary,
+                                )
+                            }
                             val toggle = { scopeName: String ->
                                 val on = scopeName !in scopes
                                 Whitelist.setTrusted(context, app.pkg, scopeName, on)
@@ -878,28 +886,27 @@ private fun indexLetter(label: String): Char {
     return if (base in 'A'..'Z') base else '#'
 }
 
-private fun installedApps(context: Context): List<AppRow> {
+/** App del profilo principale e, se date, quelle degli altri profili; le copie doppie sono una riga sola. */
+private fun installedApps(context: Context, profile: List<ProfileApp> = emptyList()): List<AppRow> {
     val pm = context.packageManager
     val collator = Collator.getInstance(Locale.ITALIAN)
-    return pm.getInstalledApplications(0)
-        .filter { it.packageName != context.packageName }
-        .map {
-            AppRow(
-                it.packageName,
-                pm.getApplicationLabel(it).toString(),
-                it.flags and (ApplicationInfo.FLAG_SYSTEM or ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0,
-            )
-        }
-        .sortedWith(compareBy(collator) { it.label })
-}
-
-/** App installate solo nel profilo di lavoro: quelle presenti anche qui sono già nell'elenco. */
-private fun profileApps(context: Context): List<AppRow> {
-    val here = context.packageManager.getInstalledApplications(0).map { it.packageName }.toSet()
-    return Profiles.apps(context, includeSystem = true)
-        .filter { it.pkg !in here && it.pkg != context.packageName }
-        .distinctBy { it.pkg }
-        .map { AppRow(it.pkg, Apps.label(context, it.pkg), it.system, work = true) }
+    val work = profile.map { it.pkg }.toSet()
+    val rows = LinkedHashMap<String, AppRow>()
+    for (it in pm.getInstalledApplications(0)) {
+        if (it.packageName == context.packageName) continue
+        rows[it.packageName] = AppRow(
+            it.packageName,
+            pm.getApplicationLabel(it).toString(),
+            it.flags and (ApplicationInfo.FLAG_SYSTEM or ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0,
+            main = true,
+            work = it.packageName in work,
+        )
+    }
+    for (app in profile) {
+        if (app.pkg == context.packageName || app.pkg in rows) continue
+        rows[app.pkg] = AppRow(app.pkg, Apps.label(context, app.pkg), app.system, main = false, work = true)
+    }
+    return rows.values.sortedWith(compareBy(collator) { it.label })
 }
 
 /** Pagina Controllo: app installate dall'utente (anche nel profilo di lavoro) ordinate per rischio, con i motivi. */
@@ -1008,10 +1015,15 @@ private fun CheckScreen() {
                             maxLines = 1, overflow = TextOverflow.Ellipsis,
                         )
                     }
-                    if (report.profileUser != null) {
-                        Tag(if (report.frozen) "lavoro · congelata" else "lavoro", p.secondary)
-                        Spacer(Modifier.width(6.dp))
-                    }
+                    Tag(
+                        when {
+                            report.profileUser == null -> "principale"
+                            report.frozen -> "lavoro · congelata"
+                            else -> "lavoro"
+                        },
+                        if (report.profileUser == null) p.secondary else p.accent,
+                    )
+                    Spacer(Modifier.width(6.dp))
                     Tag(if (ignored) "va bene" else report.level.title, if (ignored) p.ok else color)
                 }
                 if (expanded == report.key) {
@@ -1022,6 +1034,16 @@ private fun CheckScreen() {
                     for (finding in report.findings) {
                         Text("• ${finding.text}", fontSize = 13.sp, color = p.text, modifier = Modifier.padding(top = 4.dp))
                     }
+                    // Permessi concessi a questa copia: le copie nei due profili possono averne di diversi.
+                    val granted = report.granted
+                    Text(
+                        when {
+                            granted == null -> "Permessi concessi: serve Shizuku per leggerli nel profilo di lavoro"
+                            granted.isEmpty() -> "Nessun permesso sorvegliato concesso"
+                            else -> "Permessi concessi: ${granted.joinToString(", ")}"
+                        },
+                        fontSize = 13.sp, color = p.secondary, modifier = Modifier.padding(top = 8.dp),
+                    )
                     FlowRow(
                         Modifier.padding(top = 10.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),

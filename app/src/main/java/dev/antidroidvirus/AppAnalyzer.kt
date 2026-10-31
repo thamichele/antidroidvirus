@@ -16,6 +16,8 @@ data class RiskReport(
     /** Utente del profilo di lavoro (Shelter) se l'app è lì, null se è nel profilo principale. */
     val profileUser: Int? = null,
     val frozen: Boolean = false,
+    /** Permessi sorvegliati concessi a questa copia (titoli di [Perm]); null se non si può sapere. */
+    val granted: List<String>? = null,
 ) {
     /** Chiave unica: la stessa app può comparire sia nel profilo principale sia in quello di lavoro. */
     val key: String get() = if (profileUser == null) pkg else "$pkg@$profileUser"

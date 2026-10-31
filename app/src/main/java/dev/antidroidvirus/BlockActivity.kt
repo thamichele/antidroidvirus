@@ -16,6 +16,7 @@ import rikka.shizuku.Shizuku
 class BlockActivity : Activity() {
     private lateinit var pkg: String
     private lateinit var perm: Perm
+    private var user = 0
 
     private val permissionListener = Shizuku.OnRequestPermissionResultListener { requestCode, result ->
         if (requestCode != Blocker.SHIZUKU_REQUEST_CODE) return@OnRequestPermissionResultListener
@@ -33,7 +34,8 @@ class BlockActivity : Activity() {
         }
         pkg = pkgExtra
         perm = Perm.valueOf(permExtra)
-        Alerts.dismiss(this, pkg, perm)
+        user = intent.getIntExtra(Alerts.EXTRA_USER, Profiles.myUserId())
+        Alerts.dismiss(this, pkg, perm, user)
 
         when {
             Blocker.shizukuGranted() -> revoke()
@@ -51,9 +53,9 @@ class BlockActivity : Activity() {
     }
 
     private fun revoke() {
-        val label = Apps.label(this, pkg)
+        val label = Alerts.labelOf(this, pkg, user)
         Thread {
-            val ok = Blocker.revoke(pkg, perm)
+            val ok = Blocker.revoke(pkg, perm, user)
             runOnUiThread {
                 if (ok) {
                     Toast.makeText(this, "${perm.title} revocata a $label", Toast.LENGTH_LONG).show()
@@ -68,13 +70,16 @@ class BlockActivity : Activity() {
     private fun openSettings() {
         Toast.makeText(
             this,
-            "Shizuku non disponibile: togli ${perm.label} a ${Apps.label(this, pkg)} da qui",
+            "Shizuku non disponibile: togli ${perm.label} a ${Alerts.labelOf(this, pkg, user)} da qui",
             Toast.LENGTH_LONG,
         ).show()
-        startActivity(
-            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", pkg, null))
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        )
+        // La copia nel profilo di lavoro ha la sua pagina di sistema, raggiungibile da LauncherApps.
+        if (user == Profiles.myUserId() || !Profiles.openSettings(this, pkg, user)) {
+            startActivity(
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", pkg, null))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+        }
         finish()
     }
 }

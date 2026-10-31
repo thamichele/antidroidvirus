@@ -22,16 +22,17 @@ object Blocker {
     fun isPackageName(pkg: String) = PACKAGE_NAME.matches(pkg)
 
     /** Va chiamato fuori dal main thread. Ritorna true se almeno una revoca è andata a buon fine. */
-    fun revoke(pkg: String, perm: Perm): Boolean {
+    fun revoke(pkg: String, perm: Perm, user: Int = Profiles.myUserId()): Boolean {
         // Il nome pacchetto finisce in un comando eseguito come shell: solo caratteri validi.
         if (!PACKAGE_NAME.matches(pkg)) return false
+        val userArgs = arrayOf("--user", user.toString())
         var revoked = false
         // pm revoke fallisce per i permessi che l'app non ha mai chiesto: si ignora.
         for (permission in perm.permissions) {
-            if (exec("pm", "revoke", pkg, permission) == 0) revoked = true
+            if (exec("pm", "revoke", *userArgs, pkg, permission) == 0) revoked = true
         }
         for (op in perm.appOps) {
-            if (exec("appops", "set", pkg, op, "ignore") == 0) revoked = true
+            if (exec("appops", "set", *userArgs, pkg, op, "ignore") == 0) revoked = true
         }
         return revoked
     }

@@ -159,6 +159,56 @@ object Profiles {
         return raw.trim().split(':').mapNotNull { it.substringBefore('/').takeIf { p -> p.isNotBlank() && p != "null" } }.toSet()
     }
 
+    /**
+     * Permessi runtime concessi alla copia di un'app in un profilo. Nel profilo principale si leggono da
+     * PackageManager; per gli altri serve Shizuku (`dumpsys package`). null se non si può sapere.
+     */
+    fun grantedPermissions(context: Context, pkg: String, userId: Int): Set<String>? {
+        if (userId == myUserId()) {
+            val info = try {
+                context.packageManager.getPackageInfo(pkg, PackageManager.GET_PERMISSIONS)
+            } catch (e: PackageManager.NameNotFoundException) {
+                return null
+            }
+            val names = info.requestedPermissions ?: return emptySet()
+            val flags = info.requestedPermissionsFlags ?: return emptySet()
+            return names.indices
+                .filter { flags[it] and PackageInfo.REQUESTED_PERMISSION_GRANTED != 0 }
+                .map { names[it] }
+                .toSet()
+        }
+        if (!Blocker.shizukuGranted() || !Blocker.isPackageName(pkg)) return null
+        val dump = Blocker.output("dumpsys", "package", pkg) ?: return null
+        val granted = HashSet<String>()
+        var currentUser = -1
+        var inRuntime = false
+        for (raw in dump.lineSequence()) {
+            val line = raw.trim()
+            USER_LINE.find(line)?.let {
+                currentUser = it.groupValues[1].toInt()
+                inRuntime = false
+                return@let
+            }
+            if (currentUser != userId) continue
+            if (line.startsWith("runtime permissions:")) {
+                inRuntime = true
+                continue
+            }
+            if (!inRuntime) continue
+            val match = PERMISSION_LINE.find(line)
+            if (match == null) {
+                // Un'altra intestazione ("disabledComponents:" ecc.) chiude l'elenco.
+                if (line.endsWith(":")) inRuntime = false
+                continue
+            }
+            if (match.groupValues[2] == "true") granted += match.groupValues[1]
+        }
+        return granted
+    }
+
+    private val USER_LINE = Regex("^User (\\d+):")
+    private val PERMISSION_LINE = Regex("^([A-Za-z0-9_.]+): granted=(true|false)")
+
     /** Installatore di un'app del profilo, letto da shell. */
     fun installer(userId: Int, pkg: String): String? {
         if (!Blocker.shizukuGranted() || !Blocker.isPackageName(pkg)) return null

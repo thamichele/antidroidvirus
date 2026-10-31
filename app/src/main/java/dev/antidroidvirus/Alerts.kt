@@ -23,35 +23,42 @@ object Alerts {
 
     private val lastAlert = HashMap<String, Long>()
 
-    fun notificationId(pkg: String, perm: Perm) = "$pkg|${perm.name}".hashCode()
+    fun notificationId(pkg: String, perm: Perm, user: Int) = "${copyKey(pkg, user)}|${perm.name}".hashCode()
 
-    fun anomalyId(pkg: String, perm: Perm) = "$pkg|${perm.name}|anomaly".hashCode()
+    fun anomalyId(pkg: String, perm: Perm, user: Int) = "${copyKey(pkg, user)}|${perm.name}|anomaly".hashCode()
+
+    /** Chiave della copia: il pacchetto, con l'utente se è nel profilo di lavoro. */
+    fun copyKey(pkg: String, user: Int) = if (user == Profiles.myUserId()) pkg else "$pkg@$user"
+
+    /** Nome dell'app, con "(lavoro)" per la copia nel profilo di lavoro. */
+    fun labelOf(context: Context, pkg: String, user: Int) =
+        Apps.label(context, pkg) + if (user == Profiles.myUserId()) "" else " (lavoro)"
 
     /** [key] è [RiskReport.key]: il pacchetto, con l'utente se l'app è nel profilo di lavoro. */
     fun checkId(key: String) = "$key|check".hashCode()
 
-    fun alert(context: Context, pkg: String, perm: Perm, time: Long, flags: Int = 0) {
-        if (!cooledDown("$pkg|${perm.name}")) return
-        val label = Apps.label(context, pkg)
+    fun alert(context: Context, pkg: String, perm: Perm, time: Long, flags: Int, user: Int) {
+        if (!cooledDown("${copyKey(pkg, user)}|${perm.name}")) return
+        val label = labelOf(context, pkg, user)
         val at = SimpleDateFormat("HH:mm", Locale.ITALIAN).format(Date(time))
         val where = Monitor.describeFlags(flags).let { if (it.isEmpty()) "" else " $it" }
-        val id = notificationId(pkg, perm)
+        val id = notificationId(pkg, perm, user)
         val notification = base(context, CHANNEL_ALERTS, "Uso di un permesso rilevato")
             .setContentTitle("$label sta usando ${perm.label}!")
             .setContentText("Alle $at$where · app non in whitelist per ${perm.title.lowercase(Locale.ITALIAN)}")
             .addAction(action("Fidati", broadcast(context, ActionReceiver.ACTION_TRUST, pkg, perm, id)))
-            .addAction(action("Blocca", block(context, pkg, perm)))
+            .addAction(action("Blocca", block(context, pkg, perm, user)))
             .addAction(action("Ignora", broadcast(context, ActionReceiver.ACTION_IGNORE, pkg, perm, id)))
             .build()
         notify(context, id, notification)
     }
 
     /** Un'app fidata fa qualcosa fuori dal suo solito: "Fidati" silenzia solo questi avvisi per quell'app. */
-    fun anomaly(context: Context, pkg: String, perm: Perm, time: Long, flags: Int) {
-        if (!cooledDown("$pkg|${perm.name}|anomaly")) return
-        val label = Apps.label(context, pkg)
+    fun anomaly(context: Context, pkg: String, perm: Perm, time: Long, flags: Int, user: Int) {
+        if (!cooledDown("${copyKey(pkg, user)}|${perm.name}|anomaly")) return
+        val label = labelOf(context, pkg, user)
         val at = SimpleDateFormat("HH:mm", Locale.ITALIAN).format(Date(time))
-        val id = anomalyId(pkg, perm)
+        val id = anomalyId(pkg, perm, user)
         val notification = base(context, CHANNEL_ALERTS, "Comportamento insolito rilevato")
             .setContentTitle("Comportamento insolito di $label")
             .setContentText("Ha usato ${perm.label} alle $at, ${Monitor.describeFlags(flags)}")
@@ -62,7 +69,7 @@ object Alerts {
                 )
             )
             .addAction(action("Fidati", broadcast(context, ActionReceiver.ACTION_TRUST_ANOMALY, pkg, perm, id)))
-            .addAction(action("Blocca", block(context, pkg, perm)))
+            .addAction(action("Blocca", block(context, pkg, perm, user)))
             .addAction(action("Ignora", broadcast(context, ActionReceiver.ACTION_IGNORE, pkg, perm, id)))
             .build()
         notify(context, id, notification)
@@ -70,7 +77,7 @@ object Alerts {
 
     /** Un'app ha superato la soglia della pagina Controllo. */
     fun check(context: Context, pkg: String, report: RiskReport) {
-        val label = Apps.label(context, pkg) + if (report.profileUser != null) " (lavoro)" else ""
+        val label = labelOf(context, pkg, report.profileUser ?: Profiles.myUserId())
         val id = checkId(report.key)
         val reasons = report.findings.joinToString("\n") { "• ${it.text}" }
         val notification = base(context, CHANNEL_CHECKS, "App da controllare")
@@ -104,7 +111,7 @@ object Alerts {
     /** App appena installata con indizi: se è stata sospesa non si apre finché non la riattivi. */
     fun installed(context: Context, pkg: String, report: RiskReport, suspended: Boolean) {
         val user = report.profileUser
-        val label = Apps.label(context, pkg) + if (user != null) " (lavoro)" else ""
+        val label = labelOf(context, pkg, user ?: Profiles.myUserId())
         val id = installId(report.key)
         val reasons = report.findings.joinToString("\n") { "• ${it.text}" }
         val builder = base(context, CHANNEL_CHECKS, "App installata da controllare")
@@ -200,13 +207,15 @@ object Alerts {
         context.getSystemService(NotificationManager::class.java).cancel(id)
     }
 
-    fun dismiss(context: Context, pkg: String, perm: Perm) {
-        dismiss(context, notificationId(pkg, perm))
-        dismiss(context, anomalyId(pkg, perm))
+    fun dismiss(context: Context, pkg: String, perm: Perm, user: Int) {
+        dismiss(context, notificationId(pkg, perm, user))
+        dismiss(context, anomalyId(pkg, perm, user))
     }
 
+    /** Tutte le notifiche di un'app, in ogni profilo. */
     fun dismissAll(context: Context, pkg: String) {
-        for (perm in Perm.entries) dismiss(context, pkg, perm)
+        val users = listOf(Profiles.myUserId()) + Profiles.others(context).map { Profiles.userId(it) }
+        for (user in users) for (perm in Perm.entries) dismiss(context, pkg, perm, user)
     }
 
     private fun cooledDown(key: String): Boolean {
@@ -260,13 +269,14 @@ object Alerts {
     }
 
     // "Blocca" apre un'activity: da Android 12 una notifica non può avviare activity passando da un receiver.
-    private fun block(context: Context, pkg: String, perm: Perm): PendingIntent {
+    private fun block(context: Context, pkg: String, perm: Perm, user: Int): PendingIntent {
         val intent = Intent(context, BlockActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             .putExtra(EXTRA_PKG, pkg)
             .putExtra(EXTRA_PERM, perm.name)
+            .putExtra(EXTRA_USER, user)
         return PendingIntent.getActivity(
-            context, "block|$pkg|${perm.name}".hashCode(), intent,
+            context, "block|${copyKey(pkg, user)}|${perm.name}".hashCode(), intent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
     }
