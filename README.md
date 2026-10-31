@@ -70,6 +70,11 @@ senza PC e senza Play Store.
   app con un'icona e quelle presenti sul telefono ma non installate nel profilo principale.
 - Se il profilo di lavoro è in pausa, le app restano analizzabili ma le impostazioni dell'app non si aprono.
 
+## Informazioni
+
+L'icona ⓘ in alto apre la finestra Informazioni: versione installata, cosa fa l'app e i link al codice
+sorgente, al repository F-Droid degli aggiornamenti e a Shizuku.
+
 ## Installazione
 
 Tutto dal telefono, senza PC.
