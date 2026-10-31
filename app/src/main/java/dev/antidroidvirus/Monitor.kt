@@ -30,14 +30,15 @@ class Monitor(private val context: Context) {
         val fresh = HashMap<String, Pair<OpUsage, Perm>>()
         for (usage in usages) {
             if (usage.pkg == context.packageName) continue
-            val key = "${usage.pkg}|${usage.op}"
+            // Le copie nel profilo di lavoro hanno una chiave a parte: stessa app, permessi diversi.
+            val key = if (usage.user == Profiles.myUserId()) "${usage.pkg}|${usage.op}" else "${usage.pkg}@${usage.user}|${usage.op}"
             val previous = prefs.getLong(key, 0L)
             if (usage.lastAccess <= previous) continue
             editor.putLong(key, usage.lastAccess)
             // Alla prima esecuzione si registra solo il punto di partenza, senza avvisi sul passato.
             if (firstRun) continue
             val perm = Perm.fromOp(usage.op) ?: continue
-            val group = "${usage.pkg}|${perm.name}"
+            val group = "${usage.pkg}@${usage.user}|${perm.name}"
             val current = fresh[group]
             if (current == null || usage.lastAccess > current.first.lastAccess) fresh[group] = usage to perm
         }
@@ -45,10 +46,10 @@ class Monitor(private val context: Context) {
         for ((usage, perm) in fresh.values) {
             val trusted = Whitelist.isTrusted(context, usage.pkg, perm)
             val flags = contextFlags(store, usage, perm)
-            store.add(UsageEvent(usage.lastAccess, usage.pkg, usage.op, trusted, flags))
+            store.add(UsageEvent(usage.lastAccess, usage.pkg, usage.op, trusted, flags, usage.user))
             when {
-                !trusted -> Alerts.alert(context, usage.pkg, perm, usage.lastAccess, flags)
-                isAnomalous(usage.pkg, perm, flags) -> Alerts.anomaly(context, usage.pkg, perm, usage.lastAccess, flags)
+                !trusted -> Alerts.alert(context, usage.pkg, perm, usage.lastAccess, flags, usage.user)
+                isAnomalous(usage.pkg, perm, flags) -> Alerts.anomaly(context, usage.pkg, perm, usage.lastAccess, flags, usage.user)
             }
         }
         editor.putBoolean(KEY_BASELINE, true).apply()
@@ -60,7 +61,7 @@ class Monitor(private val context: Context) {
         if (usage.background) flags = flags or UsageEvent.FLAG_BACKGROUND
         if (ScreenLog.wasOff(context, usage.lastAccess)) flags = flags or UsageEvent.FLAG_SCREEN_OFF
         if (ScreenLog.isNight(usage.lastAccess)) flags = flags or UsageEvent.FLAG_NIGHT
-        if (isFrequent(store, usage.pkg, perm, usage.lastAccess)) flags = flags or UsageEvent.FLAG_FREQUENT
+        if (isFrequent(store, usage, perm)) flags = flags or UsageEvent.FLAG_FREQUENT
         return flags
     }
 
@@ -68,9 +69,10 @@ class Monitor(private val context: Context) {
      * Ultime 24 ore contro la media giornaliera dei 7 giorni prima. Le letture sono al massimo una al minuto,
      * quindi il conteggio vale come "minuti con almeno un uso": approssimato, ma confrontabile nel tempo.
      */
-    private fun isFrequent(store: EventStore, pkg: String, perm: Perm, now: Long): Boolean {
-        val today = store.count(pkg, perm.ops, now - DAY_MS, now + 1) + 1
-        val before = store.count(pkg, perm.ops, now - 8 * DAY_MS, now - DAY_MS)
+    private fun isFrequent(store: EventStore, usage: OpUsage, perm: Perm): Boolean {
+        val now = usage.lastAccess
+        val today = store.count(usage.pkg, usage.user, perm.ops, now - DAY_MS, now + 1) + 1
+        val before = store.count(usage.pkg, usage.user, perm.ops, now - 8 * DAY_MS, now - DAY_MS)
         if (before == 0) return false
         val average = before / 7.0
         return today >= FREQUENT_MIN && today >= average * FREQUENT_FACTOR

@@ -98,7 +98,8 @@ object RiskCheck {
             usageAccess = AppOpsReader.allowedPackages(context, "android:get_usage_stats"),
         )
         val backgroundUpload = if (hasUsageAccess(context)) backgroundTxBytes(context, now - DAY_MS, now) else emptyMap()
-        val events = EventStore.get(context).since(now - 7 * DAY_MS).groupBy { it.pkg }
+        val events = EventStore.get(context).since(now - 7 * DAY_MS).groupBy { it.pkg to it.user }
+        val me = Profiles.myUserId()
 
         val reports = ArrayList<RiskReport>()
         val here = HashSet<String>()
@@ -119,13 +120,16 @@ object RiskCheck {
             val findings = special.findings(pkg).toMutableList()
             findings += full(
                 context, info, special, AppAnalyzer.hasLauncher(context, pkg), installer,
-                info.applicationInfo?.uid ?: -1, events[pkg].orEmpty(), backgroundUpload, now, editor,
+                info.applicationInfo?.uid ?: -1, events[pkg to me].orEmpty(), backgroundUpload, now, editor,
             )
-            if (findings.isNotEmpty()) reports += RiskReport(pkg, findings.sortedByDescending { it.weight })
+            val granted = grantedTitles(Profiles.grantedPermissions(context, pkg, me))
+            if (findings.isNotEmpty() || !granted.isNullOrEmpty()) {
+                reports += RiskReport(pkg, findings.sortedByDescending { it.weight }, granted = granted)
+            }
         }
 
-        // Profilo di lavoro (Shelter): gli accessi speciali sono per profilo, l'APK è in comune.
-        // Le app presenti anche qui hanno già l'analisi completa: del profilo contano solo gli accessi speciali.
+        // Profilo di lavoro (Shelter): ogni copia è una voce a sé, con i suoi accessi speciali, permessi
+        // concessi e usi registrati. L'APK è lo stesso, quindi gli indizi statici si ripetono.
         val profileApps = Profiles.apps(context, includeSystem = false).groupBy { it.userId }
         for ((user, apps) in profileApps) {
             val profileSpecial = Special(
@@ -140,17 +144,16 @@ object RiskCheck {
             for (app in apps) {
                 val pkg = app.pkg
                 if (pkg == context.packageName) continue
+                val info = Profiles.packageInfo(context, pkg, user, AppAnalyzer.FLAGS) ?: continue
+                val uid = info.applicationInfo?.uid?.let { Profiles.uidIn(user, it) } ?: -1
                 val findings = profileSpecial.findings(pkg).toMutableList()
-                if (pkg !in here) {
-                    val info = Profiles.packageInfo(context, pkg, user, AppAnalyzer.FLAGS) ?: continue
-                    val uid = info.applicationInfo?.uid?.let { Profiles.uidIn(user, it) } ?: -1
-                    findings += full(
-                        context, info, profileSpecial, Profiles.hasLauncher(context, pkg, user), app.installer,
-                        uid, events[pkg].orEmpty(), backgroundUpload, now, editor,
-                    )
-                }
-                if (findings.isNotEmpty()) {
-                    reports += RiskReport(pkg, findings.sortedByDescending { it.weight }, user, app.frozen)
+                findings += full(
+                    context, info, profileSpecial, Profiles.hasLauncher(context, pkg, user), app.installer,
+                    uid, events[pkg to user].orEmpty(), backgroundUpload, now, editor,
+                )
+                val granted = grantedTitles(Profiles.grantedPermissions(context, pkg, user))
+                if (findings.isNotEmpty() || !granted.isNullOrEmpty()) {
+                    reports += RiskReport(pkg, findings.sortedByDescending { it.weight }, user, app.frozen, granted)
                 }
             }
         }
@@ -160,6 +163,10 @@ object RiskCheck {
         lastRun = now
         return sorted
     }
+
+    /** Titoli dei permessi sorvegliati tra quelli concessi, nell'ordine di [Perm]. */
+    private fun grantedTitles(permissions: Set<String>?): List<String>? =
+        permissions?.let { set -> Perm.entries.filter { perm -> perm.permissions.any { it in set } }.map { it.title } }
 
     /** Indizi di un'app oltre agli accessi speciali: manifest, provenienza, firma, comportamento, traffico. */
     private fun full(

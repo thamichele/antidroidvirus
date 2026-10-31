@@ -7,6 +7,8 @@ import android.util.Log
 
 data class OpUsage(
     val pkg: String,
+    /** Profilo della copia: la stessa app nel profilo di lavoro ha un altro UID. */
+    val user: Int,
     val op: String,
     val lastAccess: Long,
     val running: Boolean,
@@ -38,7 +40,7 @@ object AppOpsReader {
 
     fun read(context: Context): List<OpUsage> {
         val result = ArrayList<OpUsage>()
-        forEachEntry(context, WATCHED_OPS) { pkg, _, op, entry ->
+        forEachEntry(context, WATCHED_OPS) { pkg, uid, op, entry ->
             val entryClass = entry.javaClass
             val running = entryClass.getMethod("isRunning").invoke(entry) as Boolean
             val lastAccess = entryClass
@@ -52,7 +54,7 @@ object AppOpsReader {
                 -1L
             }
             if (lastAccess > 0 || running) {
-                result += OpUsage(pkg, op, lastAccess, running, lastBackground > 0 && lastBackground >= lastAccess)
+                result += OpUsage(pkg, Profiles.userOf(uid), op, lastAccess, running, lastBackground > 0 && lastBackground >= lastAccess)
             }
         }
         return result

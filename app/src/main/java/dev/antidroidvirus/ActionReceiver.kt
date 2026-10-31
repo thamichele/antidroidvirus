@@ -63,7 +63,7 @@ class ActionReceiver : BroadcastReceiver() {
                 }.start()
             }
         }
-        if (id != 0) Alerts.dismiss(context, id) else if (perm != null) Alerts.dismiss(context, pkg, perm)
+        if (id != 0) Alerts.dismiss(context, id)
     }
 
     companion object {
