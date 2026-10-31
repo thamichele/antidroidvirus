@@ -48,6 +48,8 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.ContentPaste
 import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Mic
@@ -72,6 +74,7 @@ import androidx.compose.material.icons.outlined.PauseCircle
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import android.os.Environment
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -221,6 +224,11 @@ private fun Header(title: String, tick: Int) {
             }
             Text(title, fontSize = 26.sp, fontWeight = FontWeight.SemiBold, color = p.text, letterSpacing = (-0.5).sp)
         }
+        var about by remember { mutableStateOf(false) }
+        IconButton(onClick = { about = true }, modifier = Modifier.padding(end = 4.dp)) {
+            Icon(Icons.Outlined.Info, "Informazioni", tint = p.secondary)
+        }
+        if (about) AboutDialog { about = false }
         // Kill switch: un tocco e l'app si spegne del tutto.
         Box(
             Modifier
@@ -235,6 +243,92 @@ private fun Header(title: String, tick: Int) {
         ) {
             Icon(Icons.Outlined.PowerSettingsNew, "Spegni tutto", tint = p.error)
         }
+    }
+}
+
+/** Finestra "Informazioni": nome, versione, cosa fa l'app e dove trovarla. */
+@Composable
+private fun AboutDialog(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val p = palette()
+    val version = remember {
+        try {
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "?"
+        } catch (e: Exception) {
+            "?"
+        }
+    }
+    fun open(url: String) {
+        try {
+            context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)))
+        } catch (e: Exception) {
+            Toast.makeText(context, "Nessun browser disponibile", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = p.panel,
+        titleContentColor = p.text,
+        textContentColor = p.text,
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Chiudi", color = p.accent, fontWeight = FontWeight.SemiBold) }
+        },
+        icon = {
+            Box(
+                Modifier.size(48.dp).clip(RoundedCornerShape(14.dp)).background(p.accent.copy(alpha = 0.16f)),
+                contentAlignment = Alignment.Center,
+            ) { Icon(Icons.Outlined.Shield, null, tint = p.accent, modifier = Modifier.size(28.dp)) }
+        },
+        title = {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                Text("AntiDroidVirus", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = p.text)
+                Text("Versione $version", fontSize = 13.sp, color = p.secondary)
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    "Registra quali app usano posizione, fotocamera, microfono, contatti, SMS e altri permessi, " +
+                        "avvisa per le app fuori whitelist o con comportamenti insoliti, e controlla file scaricati " +
+                        "e app appena installate, anche nel profilo di lavoro.",
+                    fontSize = 14.sp, color = p.text,
+                )
+                Text(
+                    "Uso personale, senza Play Store. Nessun accesso a internet: tutte le analisi avvengono sul telefono. " +
+                        "Permessi avanzati concessi tramite Shizuku.",
+                    fontSize = 13.sp, color = p.secondary,
+                )
+                AboutLink("Codice sorgente", "github.com/thamichele/antidroidvirus") {
+                    open("https://github.com/thamichele/antidroidvirus")
+                }
+                AboutLink("Aggiornamenti (repository F-Droid)", "thamichele.github.io/antidroidvirus/repo") {
+                    open("https://thamichele.github.io/antidroidvirus/repo")
+                }
+                AboutLink("Shizuku", "shizuku.rikka.app") { open("https://shizuku.rikka.app/") }
+                Text("Di Michele (thamichele)", fontSize = 12.sp, color = p.secondary)
+            }
+        },
+    )
+}
+
+@Composable
+private fun AboutLink(title: String, url: String, onClick: () -> Unit) {
+    val p = palette()
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(p.raised)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = p.text)
+            Text(url, fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = p.secondary)
+        }
+        Icon(Icons.Outlined.OpenInNew, null, tint = p.secondary, modifier = Modifier.size(16.dp))
     }
 }
 
