@@ -79,7 +79,10 @@ jobs:
           cat > config.yml <<CONFIG
           repo_url: https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/repo
           repo_name: AntiDroidVirus
-          repo_description: Aggiornamenti di AntiDroidVirus, compilati dalla GitHub Action del repository.
+          repo_description: >-
+            Aggiornamenti di AntiDroidVirus, l'app che registra l'uso dei permessi e segnala app e download
+            sospetti. Ogni versione è compilata dal codice sorgente su github.com/thamichele/antidroidvirus.
+          repo_icon: icon.png
           sdk_path: ${ANDROID_HOME}
           apksigner: ${APKSIGNER}
           keystore: ${REPO_KEYSTORE}
@@ -89,11 +92,23 @@ jobs:
           keydname: CN=antidroidvirus
           CONFIG
           chmod 600 config.yml
+          read -r CODICE VERSIONE < <("$RUNNER_TEMP/fdroid/bin/python" -c \
+            'import sys; from fdroidserver import common; print(*common.get_apk_id(sys.argv[1])[1:])' repo/*.apk)
+          # Senza una voce Builds per la versione pubblicata fdroid non mette il changelog nell'indice.
+          printf 'Builds:\n  - versionName: %s\n    versionCode: %s\n    commit: %s\n' \
+            "$VERSIONE" "$CODICE" "$GITHUB_SHA" >> metadata/dev.antidroidvirus.yml
           "$RUNNER_TEMP/fdroid/bin/fdroid" update --pretty
           ls -la repo
           mkdir -p ../site
           cp -r repo ../site/repo
-          echo '<meta http-equiv="refresh" content="0; url=repo/">' > ../site/index.html
+          # Pagina del repository (fdroid/sito), sia alla radice del sito sia al posto di quella generata da fdroid.
+          REPO="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/repo"
+          IMPRONTA=$(keytool -list -v -keystore "$REPO_KEYSTORE" -storepass "$REPO_PASSWORD" -alias antidroidvirus \
+            | sed -n 's/^.*SHA256: *//p' | tr -d ':')
+          sed -e "s|@@REPO_SENZA_SCHEMA@@|${REPO#https://}|g" -e "s|@@REPO@@|$REPO|g" \
+            -e "s|@@IMPRONTA@@|$IMPRONTA|g" -e "s|@@VERSIONE@@|$VERSIONE|g" sito/index.html > ../site/index.html
+          cp ../site/index.html ../site/repo/index.html
+          echo "Impronta del repository: $IMPRONTA"
       - uses: actions/upload-pages-artifact@v3
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && env.HAS_PRIVATE_KEY == 'true'
         with:

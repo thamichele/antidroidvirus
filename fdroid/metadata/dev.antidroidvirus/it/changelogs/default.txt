@@ -1,0 +1,5 @@
+Versione 0.6.2
+• Profilo di lavoro (Shelter): le sue app compaiono in Controllo e nella whitelist, con l'etichetta principale, lavoro o entrambi.
+• Le app installate in tutti e due i profili sono copie doppie con permessi propri: Blocca revoca il permesso solo alla copia giusta.
+• Le app installate nel profilo di lavoro vengono analizzate subito.
+• Nuova finestra Informazioni (icona ⓘ) con versione e link.

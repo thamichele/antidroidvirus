@@ -1,3 +1,13 @@
+<p align="center">
+  <img src="fdroid/metadata/dev.antidroidvirus/it/images/featureGraphic.png" alt="AntiDroidVirus" width="640">
+</p>
+
+<p align="center">
+  <a href="https://thamichele.github.io/antidroidvirus/"><b>Repository F-Droid</b></a> ·
+  <a href="../../releases/tag/latest">Scarica l'APK</a> ·
+  <a href="#installazione">Installazione</a>
+</p>
+
 # AntiDroidVirus
 
 App Android per uso personale che registra quali app usano posizione, fotocamera, microfono,
@@ -84,7 +94,8 @@ sorgente, al repository F-Droid degli aggiornamenti e a Shizuku.
 
 Tutto dal telefono, senza PC.
 
-1. In F-Droid apri Impostazioni › Repository, tocca **+** e incolla
+1. Dal telefono apri la [pagina del repository](https://thamichele.github.io/antidroidvirus/) e tocca
+   **Apri in F-Droid**. Oppure in F-Droid apri Impostazioni › Repository, tocca **+** e incolla
    `https://thamichele.github.io/antidroidvirus/repo?fingerprint=52C6192939571634951B82EE34424660F5055BE2EFB8C50280F0DFA772EAE9EB`.
    Poi installa AntiDroidVirus da F-Droid: gli aggiornamenti arrivano da lì, a ogni push su main.
    In alternativa scarica `antidroidvirus.apk` dalla release [**latest**](../../releases/tag/latest).
@@ -110,6 +121,19 @@ adb shell appops set dev.antidroidvirus GET_USAGE_STATS allow
 ```
 
 Accesso ai file e batteria si concedono dalla pagina Stato (pulsanti **Concedi** e **Apri**).
+
+## Repository F-Droid
+
+Ogni push su main pubblica l'APK su [thamichele.github.io/antidroidvirus](https://thamichele.github.io/antidroidvirus/),
+con la pagina in `fdroid/sito/`. Quello che F-Droid mostra sta in `fdroid/`:
+
+- `metadata/dev.antidroidvirus.yml`: autore, categorie, link;
+- `metadata/dev.antidroidvirus/it/`: nome, descrizione breve e lunga, immagini (formato fastlane) e
+  `changelogs/default.txt`, le novità della versione pubblicata: **va aggiornato a ogni nuova versione**;
+- `icon.png`: icona del repository.
+
+Icona e immagine in evidenza si rigenerano dalle sorgenti in `fdroid/grafica/` con `node fdroid/grafica/genera.js`.
+Gli screenshot vanno in `metadata/dev.antidroidvirus/it/images/phoneScreenshots/` (PNG o JPG).
 
 ## Da verificare sul telefono
 
