@@ -45,7 +45,7 @@ object Alerts {
         val id = notificationId(pkg, perm, user)
         val notification = base(context, CHANNEL_ALERTS, "Uso di un permesso rilevato")
             .setContentTitle("$label sta usando ${perm.label}!")
-            .setContentText("Alle $at$where · app non in whitelist per ${perm.title.lowercase(Locale.ITALIAN)}")
+            .setContentText("Alle $at$where · app non fidata per ${perm.title.lowercase(Locale.ITALIAN)}")
             .addAction(action("Fidati", broadcast(context, ActionReceiver.ACTION_TRUST, pkg, perm, id)))
             .addAction(action("Blocca", block(context, pkg, perm, user)))
             .addAction(action("Ignora", broadcast(context, ActionReceiver.ACTION_IGNORE, pkg, perm, id)))
@@ -65,7 +65,7 @@ object Alerts {
             .setStyle(
                 Notification.BigTextStyle().bigText(
                     "Ha usato ${perm.label} alle $at, ${Monitor.describeFlags(flags)}. " +
-                        "L'app è in whitelist, ma di solito non lo fa."
+                        "L'app è tra le fidate, ma di solito non lo fa."
                 )
             )
             .addAction(action("Fidati", broadcast(context, ActionReceiver.ACTION_TRUST_ANOMALY, pkg, perm, id)))

@@ -1,5 +1,6 @@
 package dev.antidroidvirus
 
+import android.content.Context
 import android.content.pm.PackageManager
 import android.util.Log
 import rikka.shizuku.Shizuku
@@ -21,20 +22,29 @@ object Blocker {
 
     fun isPackageName(pkg: String) = PACKAGE_NAME.matches(pkg)
 
-    /** Va chiamato fuori dal main thread. Ritorna true se almeno una revoca è andata a buon fine. */
-    fun revoke(pkg: String, perm: Perm, user: Int = Profiles.myUserId()): Boolean {
+    /**
+     * Va chiamato fuori dal main thread. Ritorna true se almeno una revoca è andata a buon fine.
+     * Si revocano solo i permessi effettivamente concessi, e ogni revoca finisce in [RevokeLog] per poterla annullare.
+     */
+    fun revoke(context: Context, pkg: String, perm: Perm, user: Int = Profiles.myUserId()): Boolean {
         // Il nome pacchetto finisce in un comando eseguito come shell: solo caratteri validi.
         if (!PACKAGE_NAME.matches(pkg)) return false
         val userArgs = arrayOf("--user", user.toString())
-        var revoked = false
+        val granted = Profiles.grantedPermissions(context, pkg, user)
+        val permissions = ArrayList<String>()
+        val ops = ArrayList<String>()
         // pm revoke fallisce per i permessi che l'app non ha mai chiesto: si ignora.
         for (permission in perm.permissions) {
-            if (exec("pm", "revoke", *userArgs, pkg, permission) == 0) revoked = true
+            if (granted != null && permission !in granted) continue
+            if (exec("pm", "revoke", *userArgs, pkg, permission) == 0) permissions += permission
         }
         for (op in perm.appOps) {
-            if (exec("appops", "set", *userArgs, pkg, op, "ignore") == 0) revoked = true
+            if (exec("appops", "set", *userArgs, pkg, op, "ignore") == 0) ops += op
         }
-        return revoked
+        val revoked = permissions.isNotEmpty() || ops.isNotEmpty()
+        if (revoked) RevokeLog.add(context, Revocation(System.currentTimeMillis(), pkg, user, permissions, ops, perm.name))
+        // Nessun permesso concesso: niente da togliere, ma non è un fallimento di Shizuku.
+        return revoked || (granted != null && perm.permissions.none { it in granted } && perm.appOps.isEmpty())
     }
 
     fun exec(vararg command: String): Int = try {

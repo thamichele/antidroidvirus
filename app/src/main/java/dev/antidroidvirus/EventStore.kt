@@ -59,6 +59,10 @@ class EventStore private constructor(context: Context) :
     fun recent(limit: Int = 300): List<UsageEvent> =
         query("SELECT time, pkg, op, trusted, flags, user FROM events ORDER BY time DESC LIMIT ?", limit.toString())
 
+    /** Tutto lo storico (30 giorni), dal più vecchio: per l'esportazione. */
+    fun all(): List<UsageEvent> =
+        query("SELECT time, pkg, op, trusted, flags, user FROM events ORDER BY time ASC")
+
     fun since(time: Long): List<UsageEvent> =
         query("SELECT time, pkg, op, trusted, flags, user FROM events WHERE time >= ? ORDER BY time DESC", time.toString())
 

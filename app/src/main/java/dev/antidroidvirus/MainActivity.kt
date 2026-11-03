@@ -7,6 +7,21 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
+import android.util.LruCache
+import androidx.compose.foundation.Image
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Factory
+import androidx.compose.material.icons.outlined.Input
+import androidx.compose.material.icons.outlined.Lightbulb
+import androidx.compose.material.icons.outlined.Restore
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import androidx.core.graphics.drawable.toBitmap
 import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
@@ -15,6 +30,9 @@ import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.BackHandler
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -164,7 +182,7 @@ fun Perm.icon(): ImageVector = when (this) {
     Perm.NEARBY -> Icons.Outlined.Bluetooth
 }
 
-private val TITLES = listOf("Stato", "Registro", "Controllo", "Whitelist")
+private val TITLES = listOf("Stato", "Registro", "Controllo", "Permessi")
 
 @Composable
 private fun MainScreen() {
@@ -605,10 +623,27 @@ private fun EventLog(tick: Int) {
         EventStore.get(context).recent().filter { !onlyAlerts || !it.trusted }
     }
     val time = remember { SimpleDateFormat("HH:mm", Locale.ITALIAN) }
+    val scope = rememberCoroutineScope()
+    val export = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(HistoryExport.MIME)) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val rows = withContext(Dispatchers.IO) { HistoryExport.write(context, uri) }
+            Toast.makeText(
+                context, if (rows < 0) "Esportazione non riuscita" else "Esportati $rows eventi", Toast.LENGTH_SHORT,
+            ).show()
+        }
+    }
 
-    Row(Modifier.padding(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(
+        Modifier.fillMaxWidth().padding(bottom = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Pill("Tutti", !onlyAlerts) { onlyAlerts = false }
         Pill("Solo avvisi", onlyAlerts) { onlyAlerts = true }
+        Spacer(Modifier.weight(1f))
+        // Tutto lo storico (30 giorni) in CSV, non solo gli eventi mostrati.
+        Pill("Esporta", false, Icons.Outlined.Download) { export.launch(HistoryExport.fileName()) }
     }
     if (events.isEmpty()) {
         Text(
@@ -689,8 +724,16 @@ private fun dayLabel(time: Long): String {
     }
 }
 
-/** In quali profili è installata. La whitelist vale per il pacchetto in tutti i profili. */
-private data class AppRow(val pkg: String, val label: String, val system: Boolean, val main: Boolean, val work: Boolean) {
+/** In quali profili è installata. La fiducia vale per il pacchetto in tutti i profili. */
+private data class AppRow(
+    val pkg: String,
+    val label: String,
+    val system: Boolean,
+    val main: Boolean,
+    val work: Boolean,
+    /** Utente del profilo di lavoro, se l'app c'è. */
+    val workUser: Int? = null,
+) {
     val where: String get() = when {
         main && work -> "entrambi"
         work -> "lavoro"
@@ -698,9 +741,58 @@ private data class AppRow(val pkg: String, val label: String, val system: Boolea
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+private enum class PermPage { APPS, VENDORS, REVOKED }
+
+/** Scheda Permessi: elenco delle app con i sottomenu Produttori e Revocati. */
 @Composable
 private fun WhitelistScreen() {
+    var page by remember { mutableStateOf(PermPage.APPS) }
+    BackHandler(enabled = page != PermPage.APPS) { page = PermPage.APPS }
+    when (page) {
+        PermPage.APPS -> AppPermissions { page = it }
+        PermPage.VENDORS -> SubPage("Produttori", onBack = { page = PermPage.APPS }) { VendorList() }
+        PermPage.REVOKED -> SubPage("Revocati", onBack = { page = PermPage.APPS }) { RevokedList() }
+    }
+}
+
+@Composable
+private fun SubPage(title: String, onBack: () -> Unit, content: @Composable () -> Unit) {
+    val p = palette()
+    Column {
+        Row(
+            Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onBack).padding(vertical = 8.dp, horizontal = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Indietro", tint = p.accent, modifier = Modifier.size(20.dp))
+            Text(
+                "Permessi › $title", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = p.accent,
+                modifier = Modifier.padding(start = 8.dp),
+            )
+        }
+        content()
+    }
+}
+
+/** Permessi sorvegliati che Android ha concesso, dai nomi dei permessi runtime. */
+private fun permsOf(granted: Set<String>?): Set<Perm> =
+    granted?.let { set -> Perm.entries.filter { perm -> perm.permissions.any { it in set } }.toSet() } ?: emptySet()
+
+/**
+ * Permessi concessi da Android a ogni app: profilo principale da PackageManager, app solo nel profilo di lavoro
+ * via Shizuku. Va chiamato fuori dal main thread.
+ */
+private fun grantedByApp(context: Context, apps: List<AppRow>): Map<String, Set<String>> {
+    val result = HashMap<String, Set<String>>()
+    for (app in apps) {
+        val user = if (app.main) Profiles.myUserId() else app.workUser ?: continue
+        Profiles.grantedPermissions(context, app.pkg, user)?.let { result[app.pkg] = it }
+    }
+    return result
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AppPermissions(onOpen: (PermPage) -> Unit) {
     val context = LocalContext.current
     val p = palette()
     var trustSystem by remember { mutableStateOf(Whitelist.trustSystemApps(context)) }
@@ -708,10 +800,15 @@ private fun WhitelistScreen() {
     var query by remember { mutableStateOf("") }
     var entries by remember { mutableStateOf(Whitelist.entries(context)) }
     var expanded by remember { mutableStateOf<String?>(null) }
+    var help by remember { mutableStateOf(false) }
+    var importDialog by remember { mutableStateOf(false) }
     var allApps by remember { mutableStateOf(installedApps(context)) }
+    var granted by remember { mutableStateOf<Map<String, Set<String>>?>(null) }
     LaunchedEffect(Unit) {
-        // Le app del profilo di lavoro si leggono via Shizuku: fuori dal main thread.
-        allApps = withContext(Dispatchers.IO) { installedApps(context, Profiles.apps(context, includeSystem = true)) }
+        // Le app del profilo di lavoro e i loro permessi si leggono via Shizuku: fuori dal main thread.
+        val apps = withContext(Dispatchers.IO) { installedApps(context, Profiles.apps(context, includeSystem = true)) }
+        allApps = apps
+        granted = withContext(Dispatchers.IO) { grantedByApp(context, apps) }
     }
     val apps = remember(query, showSystem, allApps) {
         val q = query.trim()
@@ -728,7 +825,77 @@ private fun WhitelistScreen() {
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
+    if (importDialog) {
+        AlertDialog(
+            onDismissRequest = { importDialog = false },
+            containerColor = p.panel, titleContentColor = p.text, textContentColor = p.text,
+            title = { Text("Importa da Android") },
+            text = {
+                Text(
+                    "Ogni app diventa fidata sui permessi che Android le ha già concesso (posizione, fotocamera, " +
+                        "contatti…). Non toglie niente e non cambia i permessi del telefono: dopo scorri la lista e correggi.",
+                    fontSize = 14.sp,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    importDialog = false
+                    scope.launch {
+                        val map = granted ?: withContext(Dispatchers.IO) { grantedByApp(context, allApps) }
+                        granted = map
+                        val added = withContext(Dispatchers.IO) { Whitelist.importGranted(context, map) }
+                        entries = Whitelist.entries(context)
+                        Toast.makeText(context, "Aggiunti $added permessi fidati", Toast.LENGTH_SHORT).show()
+                    }
+                }) { Text("Importa", color = p.accent, fontWeight = FontWeight.SemiBold) }
+            },
+            dismissButton = { TextButton(onClick = { importDialog = false }) { Text("Annulla", color = p.secondary) } },
+        )
+    }
+
     Column {
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(bottom = 10.dp),
+        ) {
+            Pill("Produttori", false, Icons.Outlined.Factory) { onOpen(PermPage.VENDORS) }
+            Pill("Revocati", false, Icons.Outlined.Restore) { onOpen(PermPage.REVOKED) }
+            Pill("Importa da Android", false, Icons.Outlined.Input) { importDialog = true }
+            Pill("Come funziona", help, Icons.Outlined.Lightbulb) { help = !help }
+        }
+        if (help) PermissionsHelp()
+        // Impostazione, non filtro: cambia quali avvisi arrivano.
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(bottom = 10.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(p.panel)
+                .border(1.dp, p.border, RoundedCornerShape(12.dp))
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("Fidati delle app di sistema", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = p.text)
+                Text(
+                    if (trustSystem) "Le app preinstallate non danno avvisi sui permessi"
+                    else "Anche le app preinstallate danno avvisi",
+                    fontSize = 12.sp, color = p.secondary,
+                )
+            }
+            Switch(
+                checked = trustSystem,
+                onCheckedChange = { on ->
+                    Whitelist.setTrustSystemApps(context, on)
+                    trustSystem = on
+                },
+                colors = SwitchDefaults.colors(
+                    checkedTrackColor = p.accent, checkedThumbColor = p.background,
+                    uncheckedTrackColor = p.raised, uncheckedBorderColor = p.border, uncheckedThumbColor = p.secondary,
+                ),
+            )
+        }
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
@@ -743,12 +910,13 @@ private fun WhitelistScreen() {
             ),
             modifier = Modifier.fillMaxWidth(),
         )
-        Row(Modifier.padding(vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Pill("Fidati del sistema", trustSystem) {
-                Whitelist.setTrustSystemApps(context, !trustSystem)
-                trustSystem = !trustSystem
-            }
-            Pill("Mostra sistema", showSystem) { showSystem = !showSystem }
+        Row(
+            Modifier.padding(vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Mostra:", fontSize = 13.sp, color = p.secondary)
+            Pill("Anche app di sistema", showSystem) { showSystem = !showSystem }
         }
         Box(Modifier.fillMaxSize()) {
             LazyColumn(
@@ -759,6 +927,8 @@ private fun WhitelistScreen() {
             ) {
                 items(apps, key = { it.pkg }) { app ->
                     val scopes = entries.filter { it.startsWith("${app.pkg}|") }.map { it.substringAfter('|') }.toSet()
+                    val androidPerms = permsOf(granted?.get(app.pkg))
+                    val systemTrusted = trustSystem && app.system
                     Column(
                         Modifier
                             .fillMaxWidth()
@@ -766,19 +936,35 @@ private fun WhitelistScreen() {
                             .background(p.panel)
                             .border(1.dp, if (expanded == app.pkg) p.accent else p.border, RoundedCornerShape(12.dp))
                             .clickable { expanded = if (expanded == app.pkg) null else app.pkg }
-                            .padding(horizontal = 14.dp, vertical = 12.dp)
+                            .padding(horizontal = 12.dp, vertical = 10.dp)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                app.label, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = p.text,
-                                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
-                            )
+                            AppIcon(app.pkg, Modifier.size(36.dp))
+                            Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                                Text(
+                                    app.label, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = p.text,
+                                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                )
+                                PermIcons(androidPerms, scopes, systemTrusted, granted != null)
+                            }
                             Tag(app.where, if (app.work) p.accent else p.secondary)
-                            Spacer(Modifier.width(6.dp))
-                            TrustIcons(scopes)
                         }
                         if (expanded == app.pkg) {
-                            Text(app.pkg, fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = p.secondary)
+                            Text(
+                                app.pkg, fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = p.secondary,
+                                modifier = Modifier.padding(top = 8.dp),
+                            )
+                            Text(
+                                if (androidPerms.isEmpty()) "Android non le ha concesso nessuno dei permessi sorvegliati."
+                                else "Concessi da Android: " + androidPerms.joinToString(", ") { it.title },
+                                fontSize = 12.sp, color = p.secondary,
+                            )
+                            if (systemTrusted) {
+                                Text(
+                                    "App di sistema: già fidata dall'interruttore in alto.",
+                                    fontSize = 12.sp, color = p.ok,
+                                )
+                            }
                             if (app.main && app.work) {
                                 Text(
                                     "Installata in entrambi i profili: la fiducia vale per tutte e due le copie.",
@@ -791,22 +977,11 @@ private fun WhitelistScreen() {
                                 if (on) Alerts.dismissAll(context, app.pkg)
                                 entries = Whitelist.entries(context)
                             }
-                            FlowRow(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            Text(
+                                "Fidata per:", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = p.text,
                                 modifier = Modifier.padding(top = 10.dp),
-                            ) {
-                                Pill("Tutti", Whitelist.ALL in scopes, Icons.Outlined.VerifiedUser) { toggle(Whitelist.ALL) }
-                                for (perm in Perm.entries) {
-                                    Pill(perm.title, perm.name in scopes, perm.icon()) { toggle(perm.name) }
-                                }
-                                Pill("Comportamenti insoliti", Whitelist.ANOMALY in scopes, Icons.Outlined.NightsStay) {
-                                    toggle(Whitelist.ANOMALY)
-                                }
-                                Pill("Controllo", Whitelist.CHECKS in scopes, Icons.Outlined.Policy) {
-                                    toggle(Whitelist.CHECKS)
-                                }
-                            }
+                            )
+                            ScopePills(scopes, Modifier.padding(top = 6.dp), toggle)
                         }
                     }
                 }
@@ -821,16 +996,323 @@ private fun WhitelistScreen() {
     }
 }
 
-/** Icone dei permessi su cui l'app è fidata; uno scudo se è fidata su tutto. */
+/** Pillole degli ambiti di fiducia, uguali per app e produttori. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun TrustIcons(scopes: Set<String>) {
+private fun ScopePills(scopes: Set<String>, modifier: Modifier, toggle: (String) -> Unit) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = modifier,
+    ) {
+        Pill("Tutti", Whitelist.ALL in scopes, Icons.Outlined.VerifiedUser) { toggle(Whitelist.ALL) }
+        for (perm in Perm.entries) {
+            Pill(perm.title, perm.name in scopes, perm.icon()) { toggle(perm.name) }
+        }
+        Pill("Comportamenti insoliti", Whitelist.ANOMALY in scopes, Icons.Outlined.NightsStay) { toggle(Whitelist.ANOMALY) }
+        Pill("Controllo", Whitelist.CHECKS in scopes, Icons.Outlined.Policy) { toggle(Whitelist.CHECKS) }
+    }
+}
+
+/** Legenda dei tasti della scheda Permessi. */
+@Composable
+private fun PermissionsHelp() {
     val p = palette()
-    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        if (Whitelist.ALL in scopes) {
-            Icon(Icons.Outlined.VerifiedUser, "Fidata su tutto", tint = p.ok, modifier = Modifier.size(18.dp))
-        } else {
-            for (perm in Perm.entries) {
-                if (perm.name in scopes) Icon(perm.icon(), perm.title, tint = p.ok, modifier = Modifier.size(18.dp))
+    val lines = listOf(
+        "Fidati delle app di sistema" to "interruttore: acceso, le app preinstallate (Samsung, Google, Android) non danno avvisi sui permessi.",
+        "Anche app di sistema" to "solo un filtro: le mostra nella lista, non cambia gli avvisi.",
+        "Icone sotto il nome" to "i permessi che Android ha concesso all'app. Verde: è fidata, nessun avviso. Arancione: concesso ma non fidato, l'uso dà un avviso.",
+        "Tocca un'app" to "scegli per cosa è fidata. Tutti: ogni permesso. Un permesso: solo quello. Comportamenti insoliti: niente avvisi per usi di notte o troppo frequenti. Controllo: esclusa dal punteggio di rischio.",
+        "Importa da Android" to "rende fidata ogni app sui permessi che le hai già concesso. Poi correggi a mano.",
+        "Produttori" to "le app raggruppate per chi le firma (Samsung, Google…): fidati di tutte in un colpo.",
+        "Revocati" to "i permessi tolti con Blocca, da ripristinare se un'app smette di funzionare.",
+    )
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(bottom = 10.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(p.panel)
+            .border(1.dp, p.border, RoundedCornerShape(12.dp))
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        for ((title, text) in lines) {
+            Text(
+                buildAnnotatedString {
+                    withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = p.text)) { append(title) }
+                    append(": $text")
+                },
+                fontSize = 13.sp, color = p.secondary,
+            )
+        }
+    }
+}
+
+/**
+ * Icone dei permessi concessi da Android: verdi se fidati, arancioni se danno avvisi. Uno scudo se l'app è fidata
+ * su tutto. Finché i permessi non sono letti si vedono solo quelli fidati.
+ */
+@Composable
+private fun PermIcons(androidPerms: Set<Perm>, scopes: Set<String>, systemTrusted: Boolean, loaded: Boolean) {
+    val p = palette()
+    val all = Whitelist.ALL in scopes || systemTrusted
+    val shown = if (loaded) androidPerms else Perm.entries.filter { it.name in scopes }.toSet()
+    Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 2.dp)) {
+        if (all) Icon(Icons.Outlined.VerifiedUser, "Fidata su tutto", tint = p.ok, modifier = Modifier.size(16.dp))
+        for (perm in Perm.entries) {
+            if (perm !in shown) continue
+            val trusted = all || perm.name in scopes
+            Icon(perm.icon(), perm.title, tint = if (trusted) p.ok else p.warn, modifier = Modifier.size(16.dp))
+        }
+        if (loaded && shown.isEmpty() && !all) Text("nessun permesso sorvegliato", fontSize = 12.sp, color = p.secondary)
+    }
+}
+
+private val iconCache = LruCache<String, ImageBitmap>(400)
+
+/** Icona dell'app, caricata fuori dal main thread e tenuta in memoria. */
+@Composable
+private fun AppIcon(pkg: String, modifier: Modifier) {
+    val context = LocalContext.current
+    val p = palette()
+    val bitmap by produceState<ImageBitmap?>(iconCache.get(pkg), pkg) {
+        if (value == null) value = withContext(Dispatchers.IO) { loadIcon(context, pkg) }
+    }
+    val image = bitmap
+    if (image != null) {
+        Image(image, null, modifier.clip(RoundedCornerShape(8.dp)))
+    } else {
+        Box(modifier.clip(RoundedCornerShape(8.dp)).background(p.raised))
+    }
+}
+
+private fun loadIcon(context: Context, pkg: String): ImageBitmap? = try {
+    val pm = context.packageManager
+    val info = pm.getApplicationInfo(pkg, PackageManager.MATCH_UNINSTALLED_PACKAGES)
+    val px = (36 * context.resources.displayMetrics.density).toInt()
+    pm.getApplicationIcon(info).toBitmap(px, px).asImageBitmap().also { iconCache.put(pkg, it) }
+} catch (e: Exception) {
+    null
+}
+
+/** Sottomenu Produttori: le app raggruppate per chiave di firma, con la fiducia per tutto il gruppo. */
+@Composable
+private fun VendorList() {
+    val context = LocalContext.current
+    val p = palette()
+    var vendors by remember { mutableStateOf<List<Vendor>?>(null) }
+    var entries by remember { mutableStateOf(Whitelist.entries(context)) }
+    var expanded by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) {
+        vendors = withContext(Dispatchers.IO) {
+            val rows = installedApps(context, Profiles.apps(context, includeSystem = true))
+            Vendors.group(context, rows.map { VendorApp(it.pkg, it.label, it.system) })
+        }
+    }
+    Text(
+        "App raggruppate per chi le ha firmate. Fidarti di un produttore vale per tutte le sue app, anche quelle che " +
+            "installerai poi con la stessa firma. Un'app che si spaccia per un produttore senza averne la firma finisce in un gruppo a parte.",
+        fontSize = 13.sp, color = p.secondary, modifier = Modifier.padding(bottom = 10.dp),
+    )
+    val list = vendors
+    if (list == null) {
+        Text("Lettura delle firme…", fontSize = 15.sp, color = p.secondary)
+        return
+    }
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
+        items(list, key = { it.name }) { vendor ->
+            val scopes = Whitelist.vendorScopes(entries, vendor)
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(p.panel)
+                    .border(1.dp, if (expanded == vendor.name) p.accent else p.border, RoundedCornerShape(12.dp))
+                    .clickable { expanded = if (expanded == vendor.name) null else vendor.name }
+                    .padding(horizontal = 12.dp, vertical = 10.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    AppIcon(vendor.apps.first().pkg, Modifier.size(36.dp))
+                    Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                        Text(
+                            vendor.name, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = p.text,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        )
+                        val keys = if (vendor.keys.size == 1) "1 firma" else "${vendor.keys.size} firme"
+                        Text(
+                            "${vendor.apps.size} app · ${vendor.systemCount} di sistema · $keys",
+                            fontSize = 12.sp, color = p.secondary,
+                        )
+                    }
+                    PermIcons(emptySet(), scopes, systemTrusted = false, loaded = false)
+                }
+                if (expanded == vendor.name) {
+                    val names = vendor.apps.take(15).joinToString(", ") { it.label }
+                    val more = vendor.apps.size - 15
+                    Text(
+                        names + if (more > 0) " e altre $more" else "",
+                        fontSize = 12.sp, color = p.secondary, modifier = Modifier.padding(top = 8.dp),
+                    )
+                    Text(
+                        "Firma " + vendor.keys.joinToString(", ") { it.take(16) },
+                        fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = p.secondary,
+                    )
+                    Text(
+                        "Tutte le app fidate per:", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = p.text,
+                        modifier = Modifier.padding(top = 10.dp),
+                    )
+                    ScopePills(scopes, Modifier.padding(top = 6.dp)) { scopeName ->
+                        val on = scopeName !in scopes
+                        Whitelist.setVendorTrusted(context, vendor, scopeName, on)
+                        if (on) vendor.apps.forEach { Alerts.dismissAll(context, it.pkg) }
+                        entries = Whitelist.entries(context)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ListCard(content: @Composable () -> Unit) {
+    val p = palette()
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(p.panel)
+            .border(1.dp, p.border, RoundedCornerShape(12.dp))
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+    ) { content() }
+}
+
+/** Nome leggibile di un permesso Android o di un'op AppOps sorvegliati. */
+private fun permissionTitle(name: String): String = when {
+    name == Manifest.permission.ACCESS_BACKGROUND_LOCATION -> "Posizione sempre"
+    else -> Perm.entries.firstOrNull { name in it.permissions || name in it.appOps }?.title ?: name.substringAfterLast('.')
+}
+
+/** Sottomenu Revocati: annulla le revoche e ridà ai servizi critici i permessi che mancano. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun RevokedList() {
+    val context = LocalContext.current
+    val p = palette()
+    val scope = rememberCoroutineScope()
+    var log by remember { mutableStateOf(RevokeLog.all(context)) }
+    var plan by remember { mutableStateOf<List<Repair>?>(null) }
+    var searching by remember { mutableStateOf(false) }
+    val shizuku = remember { Blocker.shizukuGranted() }
+    val date = remember { SimpleDateFormat("d MMM HH:mm", Locale.ITALIAN) }
+
+    fun act(work: () -> Boolean, done: String, after: () -> Unit) {
+        scope.launch {
+            val ok = withContext(Dispatchers.IO) { work() }
+            Toast.makeText(context, if (ok) done else "Non riuscito: Shizuku è attivo?", Toast.LENGTH_SHORT).show()
+            if (ok) after()
+        }
+    }
+
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
+        item {
+            Text(
+                "Permessi tolti con il tasto Blocca. Se un'app ha smesso di funzionare (sessione scaduta, account da " +
+                    "ricollegare, store che non aggiorna) ripristinali da qui.",
+                fontSize = 13.sp, color = p.secondary,
+            )
+            if (!shizuku) Text("Serve Shizuku attivo per ripristinare.", fontSize = 13.sp, color = p.warn)
+        }
+        if (log.isEmpty()) {
+            item {
+                Text(
+                    "Nessuna revoca registrata. Quelle fatte con le versioni precedenti non sono qui: usa il controllo qui sotto.",
+                    fontSize = 14.sp, color = p.secondary,
+                )
+            }
+        }
+        items(log, key = { "${it.time}|${it.pkg}|${it.user}|${it.perm}" }) { r ->
+            ListCard {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    AppIcon(r.pkg, Modifier.size(36.dp))
+                    Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                        Text(
+                            Alerts.labelOf(context, r.pkg, r.user), fontSize = 15.sp, fontWeight = FontWeight.Medium,
+                            color = p.text, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            (r.permissions + r.appOps).map(::permissionTitle).distinct().joinToString(", ") +
+                                " · " + date.format(Date(r.time)),
+                            fontSize = 12.sp, color = p.secondary,
+                        )
+                    }
+                    TextButton(enabled = shizuku, onClick = {
+                        act({ RevokeLog.restore(context, r) }, "Ripristinato") { log = RevokeLog.all(context) }
+                    }) { Text("Ripristina", color = if (shizuku) p.accent else p.secondary, fontWeight = FontWeight.SemiBold) }
+                }
+            }
+        }
+        item {
+            Text(
+                "Servizi Google e Samsung", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = p.text,
+                modifier = Modifier.padding(top = 12.dp),
+            )
+            Text(
+                "Cerca tra i servizi da cui dipendono account, store e telefono quelli a cui manca un permesso sorvegliato. " +
+                    "Tocca un permesso per ridarlo solo a quel servizio.",
+                fontSize = 13.sp, color = p.secondary, modifier = Modifier.padding(vertical = 6.dp),
+            )
+            Pill(if (searching) "Controllo in corso…" else "Controlla", false, Icons.Outlined.Search) {
+                if (!shizuku || searching) return@Pill
+                searching = true
+                scope.launch {
+                    plan = withContext(Dispatchers.IO) { RevokeLog.repairPlan(context) }
+                    searching = false
+                }
+            }
+        }
+        val repairs = plan
+        if (repairs != null && repairs.isEmpty()) {
+            item { Text("Nessun permesso mancante.", fontSize = 14.sp, color = p.ok) }
+        }
+        items(repairs.orEmpty(), key = { "${it.pkg}@${it.user}" }) { repair ->
+            ListCard {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    AppIcon(repair.pkg, Modifier.size(36.dp))
+                    Text(
+                        Alerts.labelOf(context, repair.pkg, repair.user), fontSize = 15.sp, fontWeight = FontWeight.Medium,
+                        color = p.text, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f).padding(start = 12.dp),
+                    )
+                }
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(top = 8.dp),
+                ) {
+                    for (permission in repair.permissions) {
+                        Pill(permissionTitle(permission), false, Icons.Outlined.Restore) {
+                            val single = Repair(repair.pkg, repair.user, listOf(permission), emptyList())
+                            act({ RevokeLog.apply(single) }, "Ridato a ${Apps.label(context, repair.pkg)}") {
+                                plan = plan?.mapNotNull {
+                                    if (it != repair) it
+                                    else it.copy(permissions = it.permissions - permission).takeIf { r -> r.permissions.isNotEmpty() || r.appOps.isNotEmpty() }
+                                }
+                            }
+                        }
+                    }
+                    for (op in repair.appOps) {
+                        Pill(permissionTitle(op), false, Icons.Outlined.Restore) {
+                            val single = Repair(repair.pkg, repair.user, emptyList(), listOf(op))
+                            act({ RevokeLog.apply(single) }, "Ridato a ${Apps.label(context, repair.pkg)}") {
+                                plan = plan?.mapNotNull {
+                                    if (it != repair) it
+                                    else it.copy(appOps = it.appOps - op).takeIf { r -> r.permissions.isNotEmpty() || r.appOps.isNotEmpty() }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -890,7 +1372,7 @@ private fun indexLetter(label: String): Char {
 private fun installedApps(context: Context, profile: List<ProfileApp> = emptyList()): List<AppRow> {
     val pm = context.packageManager
     val collator = Collator.getInstance(Locale.ITALIAN)
-    val work = profile.map { it.pkg }.toSet()
+    val work = profile.associate { it.pkg to it.userId }
     val rows = LinkedHashMap<String, AppRow>()
     for (it in pm.getInstalledApplications(0)) {
         if (it.packageName == context.packageName) continue
@@ -900,11 +1382,12 @@ private fun installedApps(context: Context, profile: List<ProfileApp> = emptyLis
             it.flags and (ApplicationInfo.FLAG_SYSTEM or ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0,
             main = true,
             work = it.packageName in work,
+            workUser = work[it.packageName],
         )
     }
     for (app in profile) {
         if (app.pkg == context.packageName || app.pkg in rows) continue
-        rows[app.pkg] = AppRow(app.pkg, Apps.label(context, app.pkg), app.system, main = false, work = true)
+        rows[app.pkg] = AppRow(app.pkg, Apps.label(context, app.pkg), app.system, main = false, work = true, workUser = app.userId)
     }
     return rows.values.sortedWith(compareBy(collator) { it.label })
 }

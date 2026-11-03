@@ -1,8 +1,10 @@
 package dev.antidroidvirus
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
@@ -12,6 +14,8 @@ import rikka.shizuku.Shizuku
 /**
  * Activity invisibile aperta dal pulsante "Blocca". Con Shizuku revoca il permesso;
  * senza, apre la pagina di sistema dei permessi dell'app per farlo a mano.
+ * Per le app di sistema e i servizi critici (Google, Samsung) chiede prima conferma: revocare lì
+ * causa sessioni scadute, account da ricollegare e store che non aggiornano.
  */
 class BlockActivity : Activity() {
     private lateinit var pkg: String
@@ -37,6 +41,29 @@ class BlockActivity : Activity() {
         user = intent.getIntExtra(Alerts.EXTRA_USER, Profiles.myUserId())
         Alerts.dismiss(this, pkg, perm, user)
 
+        val warning = CriticalApps.warning(this, pkg)
+        if (warning == null) proceed() else confirm(warning)
+    }
+
+    private fun confirm(warning: String) {
+        val night = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
+        val theme = if (night) android.R.style.Theme_Material_Dialog_Alert else android.R.style.Theme_Material_Light_Dialog_Alert
+        val label = Alerts.labelOf(this, pkg, user)
+        AlertDialog.Builder(this, theme)
+            .setTitle("Togliere ${perm.label} a $label?")
+            .setMessage("$warning\n\nSe ti fidi, conviene segnarla come fidata per ${perm.title.lowercase()}.")
+            .setPositiveButton("Fidati") { _, _ ->
+                Whitelist.setTrusted(this, pkg, perm.name, true)
+                Toast.makeText(this, "$label fidata per ${perm.title.lowercase()}", Toast.LENGTH_SHORT).show()
+                finish()
+            }
+            .setNeutralButton("Togli comunque") { _, _ -> proceed() }
+            .setNegativeButton("Annulla") { _, _ -> finish() }
+            .setOnCancelListener { finish() }
+            .show()
+    }
+
+    private fun proceed() {
         when {
             Blocker.shizukuGranted() -> revoke()
             Blocker.shizukuRunning() -> {
@@ -55,10 +82,12 @@ class BlockActivity : Activity() {
     private fun revoke() {
         val label = Alerts.labelOf(this, pkg, user)
         Thread {
-            val ok = Blocker.revoke(pkg, perm, user)
+            val ok = Blocker.revoke(this, pkg, perm, user)
             runOnUiThread {
                 if (ok) {
-                    Toast.makeText(this, "${perm.title} revocata a $label", Toast.LENGTH_LONG).show()
+                    Toast.makeText(
+                        this, "${perm.title} revocata a $label. Puoi annullare da Permessi › Revocati", Toast.LENGTH_LONG,
+                    ).show()
                     finish()
                 } else {
                     openSettings()

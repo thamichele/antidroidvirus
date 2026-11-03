@@ -118,7 +118,7 @@ object AppAnalyzer {
         null
     }
 
-    private fun firstSigner(info: PackageInfo): ByteArray? {
+    fun firstSigner(info: PackageInfo): ByteArray? {
         val signing = info.signingInfo ?: return null
         val signers = if (signing.hasMultipleSigners()) signing.apkContentsSigners else signing.signingCertificateHistory
         return signers?.firstOrNull()?.toByteArray()
