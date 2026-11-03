@@ -1,4 +1,5 @@
-Versione 0.7
+Versione 0.7.1
+• Permessi: pulsanti, interruttore e ricerca scorrono con la lista, così le app hanno tutto lo schermo.
 • La scheda Whitelist si chiama ora Permessi: icone delle app, permessi concessi da Android in verde (fidati) o arancione (danno avvisi), legenda "Come funziona".
 • Importa da Android: ogni app diventa fidata sui permessi che le hai già concesso, poi correggi a mano.
 • Produttori: app raggruppate per firma (Samsung, Google…), fidati di tutte in un colpo.
