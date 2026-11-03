@@ -103,6 +103,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -853,144 +854,153 @@ private fun AppPermissions(onOpen: (PermPage) -> Unit) {
         )
     }
 
-    Column {
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+    // Pulsanti, interruttore e ricerca scorrono insieme alla lista: tutto lo schermo resta per le app.
+    // L'indice delle lettere compare quando l'intestazione è uscita dallo schermo, per non coprirla.
+    val headerGone by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
+    Box(Modifier.fillMaxSize()) {
+        LazyColumn(
+            state = listState,
             verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.padding(bottom = 10.dp),
+            contentPadding = PaddingValues(bottom = 16.dp),
+            modifier = Modifier.fillMaxSize(),
         ) {
-            Pill("Produttori", false, Icons.Outlined.Factory) { onOpen(PermPage.VENDORS) }
-            Pill("Revocati", false, Icons.Outlined.Restore) { onOpen(PermPage.REVOKED) }
-            Pill("Importa da Android", false, Icons.Outlined.Input) { importDialog = true }
-            Pill("Come funziona", help, Icons.Outlined.Lightbulb) { help = !help }
-        }
-        if (help) PermissionsHelp()
-        // Impostazione, non filtro: cambia quali avvisi arrivano.
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(bottom = 10.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(p.panel)
-                .border(1.dp, p.border, RoundedCornerShape(12.dp))
-                .padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text("Fidati delle app di sistema", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = p.text)
-                Text(
-                    if (trustSystem) "Le app preinstallate non danno avvisi sui permessi"
-                    else "Anche le app preinstallate danno avvisi",
-                    fontSize = 12.sp, color = p.secondary,
-                )
-            }
-            Switch(
-                checked = trustSystem,
-                onCheckedChange = { on ->
-                    Whitelist.setTrustSystemApps(context, on)
-                    trustSystem = on
-                },
-                colors = SwitchDefaults.colors(
-                    checkedTrackColor = p.accent, checkedThumbColor = p.background,
-                    uncheckedTrackColor = p.raised, uncheckedBorderColor = p.border, uncheckedThumbColor = p.secondary,
-                ),
-            )
-        }
-        OutlinedTextField(
-            value = query,
-            onValueChange = { query = it },
-            placeholder = { Text("Cerca app", color = p.secondary) },
-            leadingIcon = { Icon(Icons.Outlined.Search, null, tint = p.secondary) },
-            singleLine = true,
-            shape = RoundedCornerShape(8.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = p.panel, unfocusedContainerColor = p.panel,
-                focusedBorderColor = p.accent, unfocusedBorderColor = p.border,
-                focusedTextColor = p.text, unfocusedTextColor = p.text, cursorColor = p.accent,
-            ),
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Row(
-            Modifier.padding(vertical = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text("Mostra:", fontSize = 13.sp, color = p.secondary)
-            Pill("Anche app di sistema", showSystem) { showSystem = !showSystem }
-        }
-        Box(Modifier.fillMaxSize()) {
-            LazyColumn(
-                state = listState,
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = PaddingValues(bottom = 16.dp),
-                modifier = Modifier.fillMaxSize().padding(end = 28.dp),
-            ) {
-                items(apps, key = { it.pkg }) { app ->
-                    val scopes = entries.filter { it.startsWith("${app.pkg}|") }.map { it.substringAfter('|') }.toSet()
-                    val androidPerms = permsOf(granted?.get(app.pkg))
-                    val systemTrusted = trustSystem && app.system
-                    Column(
+            item(key = "header") {
+                Column {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.padding(bottom = 10.dp),
+                    ) {
+                        Pill("Produttori", false, Icons.Outlined.Factory) { onOpen(PermPage.VENDORS) }
+                        Pill("Revocati", false, Icons.Outlined.Restore) { onOpen(PermPage.REVOKED) }
+                        Pill("Importa da Android", false, Icons.Outlined.Input) { importDialog = true }
+                        Pill("Come funziona", help, Icons.Outlined.Lightbulb) { help = !help }
+                    }
+                    if (help) PermissionsHelp()
+                    // Impostazione, non filtro: cambia quali avvisi arrivano.
+                    Row(
                         Modifier
                             .fillMaxWidth()
+                            .padding(bottom = 10.dp)
                             .clip(RoundedCornerShape(12.dp))
                             .background(p.panel)
-                            .border(1.dp, if (expanded == app.pkg) p.accent else p.border, RoundedCornerShape(12.dp))
-                            .clickable { expanded = if (expanded == app.pkg) null else app.pkg }
-                            .padding(horizontal = 12.dp, vertical = 10.dp)
+                            .border(1.dp, p.border, RoundedCornerShape(12.dp))
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            AppIcon(app.pkg, Modifier.size(36.dp))
-                            Column(Modifier.weight(1f).padding(start = 12.dp)) {
-                                Text(
-                                    app.label, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = p.text,
-                                    maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                )
-                                PermIcons(androidPerms, scopes, systemTrusted, granted != null)
-                            }
-                            Tag(app.where, if (app.work) p.accent else p.secondary)
-                        }
-                        if (expanded == app.pkg) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Fidati delle app di sistema", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = p.text)
                             Text(
-                                app.pkg, fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = p.secondary,
-                                modifier = Modifier.padding(top = 8.dp),
-                            )
-                            Text(
-                                if (androidPerms.isEmpty()) "Android non le ha concesso nessuno dei permessi sorvegliati."
-                                else "Concessi da Android: " + androidPerms.joinToString(", ") { it.title },
+                                if (trustSystem) "Le app preinstallate non danno avvisi sui permessi"
+                                else "Anche le app preinstallate danno avvisi",
                                 fontSize = 12.sp, color = p.secondary,
                             )
-                            if (systemTrusted) {
-                                Text(
-                                    "App di sistema: già fidata dall'interruttore in alto.",
-                                    fontSize = 12.sp, color = p.ok,
-                                )
-                            }
-                            if (app.main && app.work) {
-                                Text(
-                                    "Installata in entrambi i profili: la fiducia vale per tutte e due le copie.",
-                                    fontSize = 12.sp, color = p.secondary,
-                                )
-                            }
-                            val toggle = { scopeName: String ->
-                                val on = scopeName !in scopes
-                                Whitelist.setTrusted(context, app.pkg, scopeName, on)
-                                if (on) Alerts.dismissAll(context, app.pkg)
-                                entries = Whitelist.entries(context)
-                            }
-                            Text(
-                                "Fidata per:", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = p.text,
-                                modifier = Modifier.padding(top = 10.dp),
-                            )
-                            ScopePills(scopes, Modifier.padding(top = 6.dp), toggle)
                         }
+                        Switch(
+                            checked = trustSystem,
+                            onCheckedChange = { on ->
+                                Whitelist.setTrustSystemApps(context, on)
+                                trustSystem = on
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedTrackColor = p.accent, checkedThumbColor = p.background,
+                                uncheckedTrackColor = p.raised, uncheckedBorderColor = p.border, uncheckedThumbColor = p.secondary,
+                            ),
+                        )
+                    }
+                    OutlinedTextField(
+                        value = query,
+                        onValueChange = { query = it },
+                        placeholder = { Text("Cerca app", color = p.secondary) },
+                        leadingIcon = { Icon(Icons.Outlined.Search, null, tint = p.secondary) },
+                        singleLine = true,
+                        shape = RoundedCornerShape(8.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = p.panel, unfocusedContainerColor = p.panel,
+                            focusedBorderColor = p.accent, unfocusedBorderColor = p.border,
+                            focusedTextColor = p.text, unfocusedTextColor = p.text, cursorColor = p.accent,
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Row(
+                        Modifier.padding(vertical = 10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("Mostra:", fontSize = 13.sp, color = p.secondary)
+                        Pill("Anche app di sistema", showSystem) { showSystem = !showSystem }
                     }
                 }
             }
+            items(apps, key = { it.pkg }) { app ->
+                val scopes = entries.filter { it.startsWith("${app.pkg}|") }.map { it.substringAfter('|') }.toSet()
+                val androidPerms = permsOf(granted?.get(app.pkg))
+                val systemTrusted = trustSystem && app.system
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(end = if (headerGone) 28.dp else 0.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(p.panel)
+                        .border(1.dp, if (expanded == app.pkg) p.accent else p.border, RoundedCornerShape(12.dp))
+                        .clickable { expanded = if (expanded == app.pkg) null else app.pkg }
+                        .padding(horizontal = 12.dp, vertical = 10.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        AppIcon(app.pkg, Modifier.size(36.dp))
+                        Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                            Text(
+                                app.label, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = p.text,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            )
+                            PermIcons(androidPerms, scopes, systemTrusted, granted != null)
+                        }
+                        Tag(app.where, if (app.work) p.accent else p.secondary)
+                    }
+                    if (expanded == app.pkg) {
+                        Text(
+                            app.pkg, fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = p.secondary,
+                            modifier = Modifier.padding(top = 8.dp),
+                        )
+                        Text(
+                            if (androidPerms.isEmpty()) "Android non le ha concesso nessuno dei permessi sorvegliati."
+                            else "Concessi da Android: " + androidPerms.joinToString(", ") { it.title },
+                            fontSize = 12.sp, color = p.secondary,
+                        )
+                        if (systemTrusted) {
+                            Text(
+                                "App di sistema: già fidata dall'interruttore in alto.",
+                                fontSize = 12.sp, color = p.ok,
+                            )
+                        }
+                        if (app.main && app.work) {
+                            Text(
+                                "Installata in entrambi i profili: la fiducia vale per tutte e due le copie.",
+                                fontSize = 12.sp, color = p.secondary,
+                            )
+                        }
+                        val toggle = { scopeName: String ->
+                            val on = scopeName !in scopes
+                            Whitelist.setTrusted(context, app.pkg, scopeName, on)
+                            if (on) Alerts.dismissAll(context, app.pkg)
+                            entries = Whitelist.entries(context)
+                        }
+                        Text(
+                            "Fidata per:", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = p.text,
+                            modifier = Modifier.padding(top = 10.dp),
+                        )
+                        ScopePills(scopes, Modifier.padding(top = 6.dp), toggle)
+                    }
+                }
+            }
+        }
+        if (headerGone) {
             LetterIndex(
                 letters = firstIndex.keys.toList(),
                 modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight().width(24.dp),
             ) { letter ->
-                firstIndex[letter]?.let { index -> scope.launch { listState.scrollToItem(index) } }
+                // +1: il primo elemento della lista è l'intestazione.
+                firstIndex[letter]?.let { index -> scope.launch { listState.scrollToItem(index + 1) } }
             }
         }
     }
@@ -1110,18 +1120,17 @@ private fun VendorList() {
             Vendors.group(context, rows.map { VendorApp(it.pkg, it.label, it.system) })
         }
     }
-    Text(
-        "App raggruppate per chi le ha firmate. Fidarti di un produttore vale per tutte le sue app, anche quelle che " +
-            "installerai poi con la stessa firma. Un'app che si spaccia per un produttore senza averne la firma finisce in un gruppo a parte.",
-        fontSize = 13.sp, color = p.secondary, modifier = Modifier.padding(bottom = 10.dp),
-    )
     val list = vendors
-    if (list == null) {
-        Text("Lettura delle firme…", fontSize = 15.sp, color = p.secondary)
-        return
-    }
     LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
-        items(list, key = { it.name }) { vendor ->
+        item {
+            Text(
+                "App raggruppate per chi le ha firmate. Fidarti di un produttore vale per tutte le sue app, anche quelle che " +
+                    "installerai poi con la stessa firma. Un'app che si spaccia per un produttore senza averne la firma finisce in un gruppo a parte.",
+                fontSize = 13.sp, color = p.secondary,
+            )
+            if (list == null) Text("Lettura delle firme…", fontSize = 15.sp, color = p.secondary)
+        }
+        items(list.orEmpty(), key = { it.name }) { vendor ->
             val scopes = Whitelist.vendorScopes(entries, vendor)
             Column(
                 Modifier
