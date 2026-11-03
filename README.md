@@ -37,6 +37,24 @@ senza PC e senza Play Store.
   indice alfabetico laterale.
 - Nessun accesso a internet.
 
+## Permessi, produttori e storico (v0.7)
+
+- La scheda **Whitelist** si chiama **Permessi**. Ogni app ha la sua icona e, sotto il nome, i permessi che
+  Android le ha concesso: verdi se è fidata (nessun avviso), arancioni se l'uso dà un avviso.
+- **Fidati delle app di sistema** è un interruttore (cambia gli avvisi); **Anche app di sistema** è solo un filtro
+  della lista. **Come funziona** mostra la legenda dei tasti.
+- **Importa da Android**: rende fidata ogni app sui permessi che le hai già concesso. Non toglie nulla.
+- **Produttori**: app raggruppate per chiave di firma, col nome preso dal certificato (Samsung, Google…). La fiducia
+  si salva per chiave, quindi vale anche per le app installate in futuro con la stessa firma. Un'app che scrive
+  "Google" nel certificato senza avere la chiave delle app di sistema finisce nel gruppo "· altre firme".
+- **Blocca** su un'app di sistema o su un servizio critico (Google Play Services, Play Store, account Samsung,
+  Galaxy Store, tastiere, telefono…) chiede conferma e propone "Fidati": togliere permessi a questi servizi causa
+  sessioni scadute, account da ricollegare e store che non aggiornano.
+- **Revocati**: ogni revoca fatta con Blocca è registrata e si annulla con un tocco (`pm grant`). "Controlla"
+  cerca i permessi sorvegliati che mancano ai servizi critici (anche per le revoche delle versioni precedenti) e
+  li ridà uno per uno.
+- **Registro › Esporta**: tutto lo storico (30 giorni) in CSV, nella cartella che scegli.
+
 ## Comportamenti sospetti (v0.4)
 
 - Ogni uso nel registro dice se è avvenuto in background, a schermo spento, di notte (1-6) o molto più

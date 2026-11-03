@@ -13,8 +13,8 @@ android {
         minSdk = 30
         targetSdk = 36
         // Ogni build della CI ha un versionCode più alto della precedente: F-Droid la vede come aggiornamento.
-        versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull()?.plus(100) ?: 6
-        versionName = "0.6.2"
+        versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull()?.plus(100) ?: 7
+        versionName = "0.7"
     }
 
     signingConfigs {

@@ -1,5 +1,7 @@
-Versione 0.6.2
-• Profilo di lavoro (Shelter): le sue app compaiono in Controllo e nella whitelist, con l'etichetta principale, lavoro o entrambi.
-• Le app installate in tutti e due i profili sono copie doppie con permessi propri: Blocca revoca il permesso solo alla copia giusta.
-• Le app installate nel profilo di lavoro vengono analizzate subito.
-• Nuova finestra Informazioni (icona ⓘ) con versione e link.
+Versione 0.7
+• La scheda Whitelist si chiama ora Permessi: icone delle app, permessi concessi da Android in verde (fidati) o arancione (danno avvisi), legenda "Come funziona".
+• Importa da Android: ogni app diventa fidata sui permessi che le hai già concesso, poi correggi a mano.
+• Produttori: app raggruppate per firma (Samsung, Google…), fidati di tutte in un colpo.
+• Blocca chiede conferma per le app di sistema e i servizi Google e Samsung, per evitare sessioni scadute e store bloccati.
+• Revocati: annulla i permessi tolti e ridai ai servizi critici quelli che mancano.
+• Registro: esporta tutto lo storico in CSV.
