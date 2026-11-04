@@ -1,5 +1,6 @@
 package dev.antidroidvirus
 
+import androidx.compose.ui.graphics.toArgb
 import android.app.Notification
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -230,6 +231,7 @@ object Alerts {
     fun base(context: Context, channel: String, publicTitle: String): Notification.Builder =
         Notification.Builder(context, channel)
             .setSmallIcon(R.drawable.ic_notify)
+            .setColor(Accent.current.main.toArgb())
             .setCategory(Notification.CATEGORY_ALARM)
             // Sulla schermata di blocco non si mostra quale app né quale permesso.
             .setVisibility(Notification.VISIBILITY_PRIVATE)

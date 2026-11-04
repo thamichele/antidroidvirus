@@ -37,6 +37,18 @@ senza PC e senza Play Store.
   indice alfabetico laterale.
 - Nessun accesso a internet.
 
+## Design Arancio UI (v0.8)
+
+- Stesso kit delle altre app (Prendere Nota, MyVault, Gestionale, IPAM): grigi caldi, colore principale #D96D00
+  (#A85400 nel tema chiaro), carattere JetBrains Mono, pulsanti a raggio 4 e card a 12, icone SVG a tratto 1.75
+  (`Ico.kt`, al posto delle icone Material).
+- **Colore principale** nella scheda Stato: Arancio, Viola, Rosso, Giallo, Blu o Verde. Grigi e colori di stato
+  (ok teal, avviso ambra, errore rosa) restano uguali.
+- L'icona segue la specifica del kit (fondo #1C1B1A, scudo a tratto nel colore principale, centrato, nessun
+  ritaglio) e cambia colore insieme al tema: c'è un `activity-alias` del launcher per ogni colore e l'app ne tiene
+  attivo uno solo. Ha anche il livello monocromatico per le icone a tema.
+- JetBrains Mono è distribuito con licenza SIL OFL 1.1 (`licenze/JetBrainsMono-OFL.txt`).
+
 ## Permessi, produttori e storico (v0.7)
 
 - La scheda **Whitelist** si chiama **Permessi**. Ogni app ha la sua icona e, sotto il nome, i permessi che

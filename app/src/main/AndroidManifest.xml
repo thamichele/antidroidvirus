@@ -40,12 +40,87 @@
 
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="false" />
+
+        <!-- Un ingresso nel launcher per ogni colore principale: l'app ne tiene attivo uno solo,
+             così l'icona segue la modalità colori scelta (vedi Accent in Theme.kt). -->
+        <activity-alias
+            android:name=".LauncherArancio"
+            android:enabled="true"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_arancio"
+            android:roundIcon="@mipmap/ic_launcher_arancio"
+            android:targetActivity=".MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".LauncherViola"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_viola"
+            android:roundIcon="@mipmap/ic_launcher_viola"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".LauncherRosso"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_rosso"
+            android:roundIcon="@mipmap/ic_launcher_rosso"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".LauncherGiallo"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_giallo"
+            android:roundIcon="@mipmap/ic_launcher_giallo"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".LauncherBlu"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_blu"
+            android:roundIcon="@mipmap/ic_launcher_blu"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".LauncherVerde"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_verde"
+            android:roundIcon="@mipmap/ic_launcher_verde"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
 
         <activity
             android:name=".BlockActivity"

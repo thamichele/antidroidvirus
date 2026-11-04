@@ -1,9 +1,11 @@
-<!-- Icona dell'app e del repository F-Droid: lo scudo del launcher (ic_launcher_foreground.xml) su fondo scuro. -->
+<!-- Icona dell'app e del repository F-Droid, secondo la specifica del kit Arancio UI:
+     fondo #1C1B1A, scudo solo tratto nel colore principale #D96D00, centrato e dentro il 76% del lato,
+     angoli al 12% del lato. Stesso disegno del launcher (ic_launcher_foreground_arancio.xml). -->
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="112" fill="#1C1B1A"/>
-  <g transform="translate(256 256) scale(13) translate(-12 -12)" fill="none" stroke="#E3845A"
-     stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M12,3l7,3v5c0,4.5 -3,8.3 -7,10c-4,-1.7 -7,-5.5 -7,-10V6z"/>
-    <path d="M9,12l2,2l4,-4"/>
+  <rect width="512" height="512" rx="61" fill="#1C1B1A"/>
+  <g transform="translate(256 256) scale(19.456) translate(-12 -12)" fill="none" stroke="#D96D00"
+     stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 3l8 3v6c0 4.5-3.4 8-8 9c-4.6-1-8-4.5-8-9V6z"/>
+    <path d="M9 12l2 2l4-4"/>
   </g>
 </svg>

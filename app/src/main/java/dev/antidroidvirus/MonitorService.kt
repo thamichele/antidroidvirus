@@ -1,5 +1,6 @@
 package dev.antidroidvirus
 
+import androidx.compose.ui.graphics.toArgb
 import android.app.Notification
 import android.app.PendingIntent
 import android.app.Service
@@ -132,6 +133,7 @@ class MonitorService : Service() {
 
     private fun serviceNotification(): Notification = Notification.Builder(this, CHANNEL_SERVICE)
         .setSmallIcon(R.drawable.ic_notify)
+        .setColor(Accent.current.main.toArgb())
         .setContentTitle("Monitoraggio permessi attivo")
         .setOngoing(true)
         .setVisibility(Notification.VISIBILITY_SECRET)
