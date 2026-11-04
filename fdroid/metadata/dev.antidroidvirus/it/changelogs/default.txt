@@ -1,8 +1,6 @@
-Versione 0.7.1
-• Permessi: pulsanti, interruttore e ricerca scorrono con la lista, così le app hanno tutto lo schermo.
-• La scheda Whitelist si chiama ora Permessi: icone delle app, permessi concessi da Android in verde (fidati) o arancione (danno avvisi), legenda "Come funziona".
-• Importa da Android: ogni app diventa fidata sui permessi che le hai già concesso, poi correggi a mano.
-• Produttori: app raggruppate per firma (Samsung, Google…), fidati di tutte in un colpo.
-• Blocca chiede conferma per le app di sistema e i servizi Google e Samsung, per evitare sessioni scadute e store bloccati.
-• Revocati: annulla i permessi tolti e ridai ai servizi critici quelli che mancano.
-• Registro: esporta tutto lo storico in CSV.
+Versione 0.8
+• Nuovo design Arancio UI, come le altre app: arancione #D96D00, carattere JetBrains Mono, pulsanti squadrati e icone a tratto.
+• Colore principale a scelta nella scheda Stato: Arancio, Viola, Rosso, Giallo, Blu o Verde. Cambia anche l'icona dell'app.
+• Nuova icona: scudo a tratto su fondo scuro, centrato e senza tagli; anche nelle icone a tema di One UI.
+• Avvisi in ambra più leggibile, stati e link con contrasto migliore nel tema chiaro.
+• APK più leggero: le icone Material sono sostituite da quelle del kit.

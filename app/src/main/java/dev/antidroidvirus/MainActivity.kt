@@ -10,11 +10,6 @@ import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.util.LruCache
 import androidx.compose.foundation.Image
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.Factory
-import androidx.compose.material.icons.outlined.Input
-import androidx.compose.material.icons.outlined.Lightbulb
-import androidx.compose.material.icons.outlined.Restore
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -57,38 +52,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.AdminPanelSettings
-import androidx.compose.material.icons.outlined.BatteryAlert
-import androidx.compose.material.icons.outlined.Call
-import androidx.compose.material.icons.outlined.Contacts
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.ContentCopy
-import androidx.compose.material.icons.outlined.ContentPaste
-import androidx.compose.material.icons.outlined.History
-import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.OpenInNew
-import androidx.compose.material.icons.outlined.Key
-import androidx.compose.material.icons.outlined.LocationOn
-import androidx.compose.material.icons.outlined.Mic
-import androidx.compose.material.icons.outlined.PhotoCamera
-import androidx.compose.material.icons.outlined.PowerSettingsNew
-import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.Shield
-import androidx.compose.material.icons.outlined.Sms
-import androidx.compose.material.icons.outlined.VerifiedUser
-import androidx.compose.material.icons.outlined.Dashboard
-import androidx.compose.material.icons.outlined.Bluetooth
-import androidx.compose.material.icons.outlined.Insights
-import androidx.compose.material.icons.outlined.NightsStay
-import androidx.compose.material.icons.outlined.PhoneAndroid
-import androidx.compose.material.icons.outlined.Photo
-import androidx.compose.material.icons.outlined.Policy
-import androidx.compose.material.icons.outlined.Sensors
-import androidx.compose.material.icons.outlined.Tune
-import androidx.compose.material.icons.outlined.Download
-import androidx.compose.material.icons.outlined.InstallMobile
-import androidx.compose.material.icons.outlined.PauseCircle
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import android.os.Environment
@@ -118,11 +81,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.border
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -170,17 +135,17 @@ object Hardening {
 }
 
 fun Perm.icon(): ImageVector = when (this) {
-    Perm.LOCATION -> Icons.Outlined.LocationOn
-    Perm.CAMERA -> Icons.Outlined.PhotoCamera
-    Perm.MICROPHONE -> Icons.Outlined.Mic
-    Perm.CONTACTS -> Icons.Outlined.Contacts
-    Perm.CALL_LOG -> Icons.Outlined.Call
-    Perm.SMS -> Icons.Outlined.Sms
-    Perm.CLIPBOARD -> Icons.Outlined.ContentPaste
-    Perm.MEDIA -> Icons.Outlined.Photo
-    Perm.PHONE -> Icons.Outlined.PhoneAndroid
-    Perm.SENSORS -> Icons.Outlined.Sensors
-    Perm.NEARBY -> Icons.Outlined.Bluetooth
+    Perm.LOCATION -> Ico.LocationOn
+    Perm.CAMERA -> Ico.PhotoCamera
+    Perm.MICROPHONE -> Ico.Mic
+    Perm.CONTACTS -> Ico.Contacts
+    Perm.CALL_LOG -> Ico.Call
+    Perm.SMS -> Ico.Sms
+    Perm.CLIPBOARD -> Ico.ContentPaste
+    Perm.MEDIA -> Ico.Photo
+    Perm.PHONE -> Ico.PhoneAndroid
+    Perm.SENSORS -> Ico.Sensors
+    Perm.NEARBY -> Ico.Bluetooth
 }
 
 private val TITLES = listOf("Stato", "Registro", "Controllo", "Permessi")
@@ -209,7 +174,7 @@ private fun MainScreen() {
             }
         }
         NavigationBar(containerColor = p.panel, tonalElevation = 0.dp, modifier = Modifier.border(1.dp, p.border)) {
-            val items = listOf(Icons.Outlined.Dashboard, Icons.Outlined.History, Icons.Outlined.Policy, Icons.Outlined.VerifiedUser)
+            val items = listOf(Ico.Home, Ico.History, Ico.Policy, Ico.Lock)
             for (i in TITLES.indices) {
                 NavigationBarItem(
                     selected = tab == i,
@@ -245,23 +210,40 @@ private fun Header(title: String, tick: Int) {
         }
         var about by remember { mutableStateOf(false) }
         IconButton(onClick = { about = true }, modifier = Modifier.padding(end = 4.dp)) {
-            Icon(Icons.Outlined.Info, "Informazioni", tint = p.secondary)
+            Icon(Ico.Info, "Informazioni", tint = p.secondary)
         }
         if (about) AboutDialog { about = false }
         // Kill switch: un tocco e l'app si spegne del tutto.
         Box(
             Modifier
                 .size(44.dp)
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(4.dp))
                 .background(p.error.copy(alpha = 0.16f))
+                .border(1.dp, p.error.copy(alpha = 0.45f), RoundedCornerShape(4.dp))
                 .clickable {
                     (context as? Activity)?.finishAndRemoveTask()
                     KillSwitch.engage(context)
                 },
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Outlined.PowerSettingsNew, "Spegni tutto", tint = p.error)
+            Icon(Ico.Power, "Spegni tutto", tint = p.error)
         }
+    }
+}
+
+/**
+ * Icona dell'app secondo la specifica del kit: fondo sempre scuro, scudo nel colore principale,
+ * centrato e dentro il 76% del riquadro, angoli al 12% del lato.
+ */
+@Composable
+private fun AppBadge(size: androidx.compose.ui.unit.Dp) {
+    val shape = RoundedCornerShape(size * 0.12f)
+    Box(
+        Modifier.size(size).clip(shape).background(Color(0xFF1C1B1A)).border(1.dp, Color(0xFF45413D), shape),
+        contentAlignment = Alignment.Center,
+    ) {
+        // Il disegno occupa 20 unità su 24 del viewBox: 20/24 × lato icona = 76% del riquadro.
+        Icon(Ico.Shield, null, tint = Accent.current.main, modifier = Modifier.size(size * 0.76f * 24f / 20f))
     }
 }
 
@@ -291,13 +273,10 @@ private fun AboutDialog(onDismiss: () -> Unit) {
         titleContentColor = p.text,
         textContentColor = p.text,
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Chiudi", color = p.accent, fontWeight = FontWeight.SemiBold) }
+            TextButton(onClick = onDismiss) { Text("Chiudi", color = p.accentText, fontWeight = FontWeight.SemiBold) }
         },
         icon = {
-            Box(
-                Modifier.size(48.dp).clip(RoundedCornerShape(14.dp)).background(p.accent.copy(alpha = 0.16f)),
-                contentAlignment = Alignment.Center,
-            ) { Icon(Icons.Outlined.Shield, null, tint = p.accent, modifier = Modifier.size(28.dp)) }
+            AppBadge(56.dp)
         },
         title = {
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
@@ -337,7 +316,7 @@ private fun AboutLink(title: String, url: String, onClick: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(8.dp))
             .background(p.raised)
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 10.dp),
@@ -345,9 +324,9 @@ private fun AboutLink(title: String, url: String, onClick: () -> Unit) {
     ) {
         Column(Modifier.weight(1f)) {
             Text(title, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = p.text)
-            Text(url, fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = p.secondary)
+            Text(url, fontSize = 12.sp, fontFamily = Mono, color = p.secondary)
         }
-        Icon(Icons.Outlined.OpenInNew, null, tint = p.secondary, modifier = Modifier.size(16.dp))
+        Icon(Ico.OpenInNew, null, tint = p.secondary, modifier = Modifier.size(16.dp))
     }
 }
 
@@ -403,7 +382,7 @@ private fun StatusScreen(tick: Int) {
         if (missing && shizukuRunning) {
             Panel {
                 StatusRow(
-                    Icons.Outlined.AdminPanelSettings, "Permessi senza PC",
+                    Ico.ShieldAlert, "Permessi senza PC",
                     when {
                         granting -> "Concessione in corso…"
                         grantResult != null -> grantResult!!
@@ -431,14 +410,14 @@ private fun StatusScreen(tick: Int) {
                             }
                         },
                     ) {
-                        Text(if (shizukuGranted) "Concedi" else "Autorizza", color = p.accent, fontWeight = FontWeight.SemiBold)
+                        Text(if (shizukuGranted) "Concedi" else "Autorizza", color = p.accentText, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
         }
         Panel {
             StatusRow(
-                Icons.Outlined.Shield, "Monitoraggio",
+                Ico.Shield, "Monitoraggio",
                 if (running) "Attivo" else "Spento",
                 if (running) Level.OK else Level.WARN,
             ) {
@@ -447,14 +426,14 @@ private fun StatusScreen(tick: Int) {
                     enabled = granted,
                     onCheckedChange = { on -> if (on) MonitorService.start(context) else MonitorService.stop(context) },
                     colors = SwitchDefaults.colors(
-                        checkedTrackColor = p.accent, checkedThumbColor = p.background,
+                        checkedTrackColor = p.accent, checkedThumbColor = p.onAccent,
                         uncheckedTrackColor = p.raised, uncheckedBorderColor = p.border, uncheckedThumbColor = p.secondary,
                     ),
                 )
             }
             Divider()
             StatusRow(
-                Icons.Outlined.Key, "Permesso AppOps",
+                Ico.Key, "Permesso AppOps",
                 if (granted) "Concesso" else "Mancante: usa Shizuku o il comando ADB",
                 if (granted) Level.OK else Level.ERROR,
             ) {
@@ -462,13 +441,13 @@ private fun StatusScreen(tick: Int) {
                     IconButton(onClick = {
                         context.getSystemService(ClipboardManager::class.java)
                             .setPrimaryClip(ClipData.newPlainText("comando", grantCommand))
-                    }) { Icon(Icons.Outlined.ContentCopy, "Copia comando", tint = p.text) }
+                    }) { Icon(Ico.ContentCopy, "Copia comando", tint = p.text) }
                 }
             }
             if (!granted) {
                 Text(
                     grantCommand,
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = Mono,
                     fontSize = 12.sp,
                     color = p.secondary,
                     modifier = Modifier.padding(start = 52.dp, end = 16.dp, bottom = 10.dp),
@@ -476,7 +455,7 @@ private fun StatusScreen(tick: Int) {
             }
             Divider()
             StatusRow(
-                Icons.Outlined.Insights, "Dati di utilizzo",
+                Ico.Insights, "Dati di utilizzo",
                 if (usageAccess) "Concessi: traffico per app attivo" else "Mancanti: niente traffico per app",
                 if (usageAccess) Level.OK else Level.WARN,
             ) {
@@ -484,13 +463,13 @@ private fun StatusScreen(tick: Int) {
                     IconButton(onClick = {
                         context.getSystemService(ClipboardManager::class.java)
                             .setPrimaryClip(ClipData.newPlainText("comando", usageCommand))
-                    }) { Icon(Icons.Outlined.ContentCopy, "Copia comando", tint = p.text) }
+                    }) { Icon(Ico.ContentCopy, "Copia comando", tint = p.text) }
                 }
             }
             if (!usageAccess) {
                 Text(
                     usageCommand,
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = Mono,
                     fontSize = 12.sp,
                     color = p.secondary,
                     modifier = Modifier.padding(start = 52.dp, end = 16.dp, bottom = 10.dp),
@@ -498,7 +477,7 @@ private fun StatusScreen(tick: Int) {
             }
             Divider()
             StatusRow(
-                Icons.Outlined.AdminPanelSettings, "Shizuku per Blocca",
+                Ico.ShieldAlert, "Shizuku per Blocca",
                 when {
                     shizukuGranted -> "Attivo"
                     shizukuRunning -> "Da autorizzare"
@@ -508,24 +487,25 @@ private fun StatusScreen(tick: Int) {
             ) {
                 if (shizukuRunning && !shizukuGranted) {
                     TextButton(onClick = { Shizuku.requestPermission(Blocker.SHIZUKU_REQUEST_CODE) }) {
-                        Text("Autorizza", color = p.accent, fontWeight = FontWeight.SemiBold)
+                        Text("Autorizza", color = p.accentText, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
             Divider()
             StatusRow(
-                Icons.Outlined.BatteryAlert, "Batteria",
+                Ico.Battery, "Batteria",
                 if (unrestricted) "Senza restrizioni" else "One UI può fermare il servizio",
                 if (unrestricted) Level.OK else Level.WARN,
             ) {
                 if (!unrestricted) {
                     TextButton(onClick = {
                         context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
-                    }) { Text("Apri", color = p.accent, fontWeight = FontWeight.SemiBold) }
+                    }) { Text("Apri", color = p.accentText, fontWeight = FontWeight.SemiBold) }
                 }
             }
         }
         ProtectionPanel(tick)
+        AccentPanel()
         Text(
             "Il pulsante rosso in alto spegne subito tutto: servizio, notifiche e avvio automatico.",
             fontSize = 13.sp, color = p.secondary,
@@ -535,6 +515,65 @@ private fun StatusScreen(tick: Int) {
 
 @Composable
 private fun Divider() = HorizontalDivider(color = palette().border)
+
+/** Modalità colori del kit: il colore principale si sceglie qui e vale anche per l'icona dell'app. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AccentPanel() {
+    val context = LocalContext.current
+    val p = palette()
+    val current = Accent.current
+    Panel {
+        Row(Modifier.padding(start = 16.dp, end = 16.dp, top = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Ico.Palette, null, tint = p.accentText, modifier = Modifier.size(22.dp))
+            Column(Modifier.weight(1f).padding(start = 14.dp)) {
+                Text("Colore principale", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = p.text)
+                Text(
+                    "Cambia pulsanti, evidenziazioni e icona dell'app",
+                    fontSize = 13.sp, color = p.secondary,
+                )
+            }
+        }
+        FlowRow(
+            Modifier.padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            for (theme in AccentTheme.entries) {
+                val selected = theme == current
+                val shape = RoundedCornerShape(4.dp)
+                val swatch = if (isSystemInDarkTheme()) theme.main else theme.light
+                Row(
+                    Modifier
+                        .height(44.dp)
+                        .clip(shape)
+                        .background(if (selected) swatch.copy(alpha = 0.12f) else p.panel)
+                        .border(1.dp, if (selected) swatch else p.border, shape)
+                        .selectable(selected = selected, role = Role.RadioButton) { Accent.set(context, theme) }
+                        .padding(start = 10.dp, end = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        Modifier.size(22.dp).clip(shape).background(swatch),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (selected) Icon(Ico.Check, null, tint = p.onAccent, modifier = Modifier.size(16.dp))
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        theme.label, fontSize = 14.sp,
+                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium, color = p.text,
+                    )
+                }
+            }
+        }
+        Text(
+            "L'icona sulla schermata Home potrebbe sparire per qualche secondo: se non torna, rimettila dal cassetto app.",
+            fontSize = 12.sp, color = p.secondary,
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 14.dp),
+        )
+    }
+}
 
 @Composable
 private fun StatCard(title: String, value: String, caption: String, valueColor: Color, modifier: Modifier) {
@@ -579,16 +618,16 @@ private fun StatusRow(
     }
 }
 
-/** Pillola del kit: piena quando selezionata, contornata altrimenti. */
+/** Pulsante filtro del kit (raggio 4): pieno quando selezionato, contornato altrimenti. */
 @Composable
 private fun Pill(text: String, selected: Boolean, icon: ImageVector? = null, onClick: () -> Unit) {
     val p = palette()
     Row(
         Modifier
             .height(36.dp)
-            .clip(RoundedCornerShape(999.dp))
+            .clip(RoundedCornerShape(4.dp))
             .background(if (selected) p.text else p.panel)
-            .border(1.dp, if (selected) p.text else p.border, RoundedCornerShape(999.dp))
+            .border(1.dp, if (selected) p.text else p.border, RoundedCornerShape(4.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -608,7 +647,7 @@ private fun Pill(text: String, selected: Boolean, icon: ImageVector? = null, onC
 @Composable
 private fun PermBadge(perm: Perm, tint: Color) {
     Box(
-        Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(tint.copy(alpha = 0.16f)),
+        Modifier.size(36.dp).clip(RoundedCornerShape(6.dp)).background(tint.copy(alpha = 0.16f)),
         contentAlignment = Alignment.Center,
     ) {
         Icon(perm.icon(), perm.title, tint = tint, modifier = Modifier.size(20.dp))
@@ -644,7 +683,7 @@ private fun EventLog(tick: Int) {
         Pill("Solo avvisi", onlyAlerts) { onlyAlerts = true }
         Spacer(Modifier.weight(1f))
         // Tutto lo storico (30 giorni) in CSV, non solo gli eventi mostrati.
-        Pill("Esporta", false, Icons.Outlined.Download) { export.launch(HistoryExport.fileName()) }
+        Pill("Esporta", false, Ico.Download) { export.launch(HistoryExport.fileName()) }
     }
     if (events.isEmpty()) {
         Text(
@@ -761,12 +800,12 @@ private fun SubPage(title: String, onBack: () -> Unit, content: @Composable () -
     val p = palette()
     Column {
         Row(
-            Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onBack).padding(vertical = 8.dp, horizontal = 4.dp),
+            Modifier.clip(RoundedCornerShape(4.dp)).clickable(onClick = onBack).padding(vertical = 8.dp, horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Indietro", tint = p.accent, modifier = Modifier.size(20.dp))
+            Icon(Ico.ArrowBack, "Indietro", tint = p.accentText, modifier = Modifier.size(20.dp))
             Text(
-                "Permessi › $title", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = p.accent,
+                "Permessi › $title", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = p.accentText,
                 modifier = Modifier.padding(start = 8.dp),
             )
         }
@@ -848,7 +887,7 @@ private fun AppPermissions(onOpen: (PermPage) -> Unit) {
                         entries = Whitelist.entries(context)
                         Toast.makeText(context, "Aggiunti $added permessi fidati", Toast.LENGTH_SHORT).show()
                     }
-                }) { Text("Importa", color = p.accent, fontWeight = FontWeight.SemiBold) }
+                }) { Text("Importa", color = p.accentText, fontWeight = FontWeight.SemiBold) }
             },
             dismissButton = { TextButton(onClick = { importDialog = false }) { Text("Annulla", color = p.secondary) } },
         )
@@ -871,10 +910,10 @@ private fun AppPermissions(onOpen: (PermPage) -> Unit) {
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.padding(bottom = 10.dp),
                     ) {
-                        Pill("Produttori", false, Icons.Outlined.Factory) { onOpen(PermPage.VENDORS) }
-                        Pill("Revocati", false, Icons.Outlined.Restore) { onOpen(PermPage.REVOKED) }
-                        Pill("Importa da Android", false, Icons.Outlined.Input) { importDialog = true }
-                        Pill("Come funziona", help, Icons.Outlined.Lightbulb) { help = !help }
+                        Pill("Produttori", false, Ico.Factory) { onOpen(PermPage.VENDORS) }
+                        Pill("Revocati", false, Ico.Restore) { onOpen(PermPage.REVOKED) }
+                        Pill("Importa da Android", false, Ico.Import) { importDialog = true }
+                        Pill("Come funziona", help, Ico.Lightbulb) { help = !help }
                     }
                     if (help) PermissionsHelp()
                     // Impostazione, non filtro: cambia quali avvisi arrivano.
@@ -903,7 +942,7 @@ private fun AppPermissions(onOpen: (PermPage) -> Unit) {
                                 trustSystem = on
                             },
                             colors = SwitchDefaults.colors(
-                                checkedTrackColor = p.accent, checkedThumbColor = p.background,
+                                checkedTrackColor = p.accent, checkedThumbColor = p.onAccent,
                                 uncheckedTrackColor = p.raised, uncheckedBorderColor = p.border, uncheckedThumbColor = p.secondary,
                             ),
                         )
@@ -912,9 +951,9 @@ private fun AppPermissions(onOpen: (PermPage) -> Unit) {
                         value = query,
                         onValueChange = { query = it },
                         placeholder = { Text("Cerca app", color = p.secondary) },
-                        leadingIcon = { Icon(Icons.Outlined.Search, null, tint = p.secondary) },
+                        leadingIcon = { Icon(Ico.Search, null, tint = p.secondary) },
                         singleLine = true,
-                        shape = RoundedCornerShape(8.dp),
+                        shape = RoundedCornerShape(4.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedContainerColor = p.panel, unfocusedContainerColor = p.panel,
                             focusedBorderColor = p.accent, unfocusedBorderColor = p.border,
@@ -955,11 +994,11 @@ private fun AppPermissions(onOpen: (PermPage) -> Unit) {
                             )
                             PermIcons(androidPerms, scopes, systemTrusted, granted != null)
                         }
-                        Tag(app.where, if (app.work) p.accent else p.secondary)
+                        Tag(app.where, if (app.work) p.accentText else p.secondary)
                     }
                     if (expanded == app.pkg) {
                         Text(
-                            app.pkg, fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = p.secondary,
+                            app.pkg, fontSize = 12.sp, fontFamily = Mono, color = p.secondary,
                             modifier = Modifier.padding(top = 8.dp),
                         )
                         Text(
@@ -1015,12 +1054,12 @@ private fun ScopePills(scopes: Set<String>, modifier: Modifier, toggle: (String)
         verticalArrangement = Arrangement.spacedBy(8.dp),
         modifier = modifier,
     ) {
-        Pill("Tutti", Whitelist.ALL in scopes, Icons.Outlined.VerifiedUser) { toggle(Whitelist.ALL) }
+        Pill("Tutti", Whitelist.ALL in scopes, Ico.Shield) { toggle(Whitelist.ALL) }
         for (perm in Perm.entries) {
             Pill(perm.title, perm.name in scopes, perm.icon()) { toggle(perm.name) }
         }
-        Pill("Comportamenti insoliti", Whitelist.ANOMALY in scopes, Icons.Outlined.NightsStay) { toggle(Whitelist.ANOMALY) }
-        Pill("Controllo", Whitelist.CHECKS in scopes, Icons.Outlined.Policy) { toggle(Whitelist.CHECKS) }
+        Pill("Comportamenti insoliti", Whitelist.ANOMALY in scopes, Ico.Night) { toggle(Whitelist.ANOMALY) }
+        Pill("Controllo", Whitelist.CHECKS in scopes, Ico.Policy) { toggle(Whitelist.CHECKS) }
     }
 }
 
@@ -1069,7 +1108,7 @@ private fun PermIcons(androidPerms: Set<Perm>, scopes: Set<String>, systemTruste
     val all = Whitelist.ALL in scopes || systemTrusted
     val shown = if (loaded) androidPerms else Perm.entries.filter { it.name in scopes }.toSet()
     Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 2.dp)) {
-        if (all) Icon(Icons.Outlined.VerifiedUser, "Fidata su tutto", tint = p.ok, modifier = Modifier.size(16.dp))
+        if (all) Icon(Ico.Shield, "Fidata su tutto", tint = p.ok, modifier = Modifier.size(16.dp))
         for (perm in Perm.entries) {
             if (perm !in shown) continue
             val trusted = all || perm.name in scopes
@@ -1165,7 +1204,7 @@ private fun VendorList() {
                     )
                     Text(
                         "Firma " + vendor.keys.joinToString(", ") { it.take(16) },
-                        fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = p.secondary,
+                        fontSize = 11.sp, fontFamily = Mono, color = p.secondary,
                     )
                     Text(
                         "Tutte le app fidate per:", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = p.text,
@@ -1257,7 +1296,7 @@ private fun RevokedList() {
                     }
                     TextButton(enabled = shizuku, onClick = {
                         act({ RevokeLog.restore(context, r) }, "Ripristinato") { log = RevokeLog.all(context) }
-                    }) { Text("Ripristina", color = if (shizuku) p.accent else p.secondary, fontWeight = FontWeight.SemiBold) }
+                    }) { Text("Ripristina", color = if (shizuku) p.accentText else p.secondary, fontWeight = FontWeight.SemiBold) }
                 }
             }
         }
@@ -1271,7 +1310,7 @@ private fun RevokedList() {
                     "Tocca un permesso per ridarlo solo a quel servizio.",
                 fontSize = 13.sp, color = p.secondary, modifier = Modifier.padding(vertical = 6.dp),
             )
-            Pill(if (searching) "Controllo in corso…" else "Controlla", false, Icons.Outlined.Search) {
+            Pill(if (searching) "Controllo in corso…" else "Controlla", false, Ico.Search) {
                 if (!shizuku || searching) return@Pill
                 searching = true
                 scope.launch {
@@ -1300,7 +1339,7 @@ private fun RevokedList() {
                     modifier = Modifier.padding(top = 8.dp),
                 ) {
                     for (permission in repair.permissions) {
-                        Pill(permissionTitle(permission), false, Icons.Outlined.Restore) {
+                        Pill(permissionTitle(permission), false, Ico.Restore) {
                             val single = Repair(repair.pkg, repair.user, listOf(permission), emptyList())
                             act({ RevokeLog.apply(single) }, "Ridato a ${Apps.label(context, repair.pkg)}") {
                                 plan = plan?.mapNotNull {
@@ -1311,7 +1350,7 @@ private fun RevokedList() {
                         }
                     }
                     for (op in repair.appOps) {
-                        Pill(permissionTitle(op), false, Icons.Outlined.Restore) {
+                        Pill(permissionTitle(op), false, Ico.Restore) {
                             val single = Repair(repair.pkg, repair.user, emptyList(), listOf(op))
                             act({ RevokeLog.apply(single) }, "Ridato a ${Apps.label(context, repair.pkg)}") {
                                 plan = plan?.mapNotNull {
@@ -1365,7 +1404,7 @@ private fun LetterIndex(letters: List<Char>, modifier: Modifier, onLetter: (Char
                 letter.toString(),
                 fontSize = 11.sp,
                 fontWeight = if (letter == active) FontWeight.Bold else FontWeight.Medium,
-                color = if (letter == active) p.accent else p.secondary,
+                color = if (letter == active) p.accentText else p.secondary,
             )
         }
     }
@@ -1434,8 +1473,8 @@ private fun CheckScreen() {
     LaunchedEffect(Unit) { if (lastRun == 0L) analyze() }
 
     Row(Modifier.padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Pill("App", !showFiles, Icons.Outlined.Policy) { showFiles = false }
-        Pill("File scaricati", showFiles, Icons.Outlined.Download) { showFiles = true }
+        Pill("App", !showFiles, Ico.Policy) { showFiles = false }
+        Pill("File scaricati", showFiles, Ico.Download) { showFiles = true }
     }
     if (showFiles) {
         FileList()
@@ -1457,7 +1496,7 @@ private fun CheckScreen() {
         Pill("Tutte", showAll) { showAll = true }
         Spacer(Modifier.weight(1f))
         TextButton(onClick = { analyze() }, enabled = !running) {
-            Text(if (running) "Analisi…" else "Analizza", color = p.accent, fontWeight = FontWeight.SemiBold)
+            Text(if (running) "Analisi…" else "Analizza", color = p.accentText, fontWeight = FontWeight.SemiBold)
         }
     }
     if (lastRun > 0) {
@@ -1492,7 +1531,7 @@ private fun CheckScreen() {
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
-                        Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(color.copy(alpha = 0.16f)),
+                        Modifier.size(36.dp).clip(RoundedCornerShape(6.dp)).background(color.copy(alpha = 0.16f)),
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(report.score.toString(), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = color)
@@ -1513,14 +1552,14 @@ private fun CheckScreen() {
                             report.frozen -> "lavoro · congelata"
                             else -> "lavoro"
                         },
-                        if (report.profileUser == null) p.secondary else p.accent,
+                        if (report.profileUser == null) p.secondary else p.accentText,
                     )
                     Spacer(Modifier.width(6.dp))
                     Tag(if (ignored) "va bene" else report.level.title, if (ignored) p.ok else color)
                 }
                 if (expanded == report.key) {
                     Text(
-                        report.pkg, fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = p.secondary,
+                        report.pkg, fontSize = 12.sp, fontFamily = Mono, color = p.secondary,
                         modifier = Modifier.padding(top = 8.dp),
                     )
                     for (finding in report.findings) {
@@ -1541,7 +1580,7 @@ private fun CheckScreen() {
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Pill("Va bene così", ignored, Icons.Outlined.VerifiedUser) {
+                        Pill("Va bene così", ignored, Ico.Shield) {
                             Whitelist.setTrusted(context, report.pkg, Whitelist.CHECKS, !ignored)
                             if (!ignored) {
                                 RiskCheck.forgetSigner(context, report.pkg)
@@ -1549,7 +1588,7 @@ private fun CheckScreen() {
                             }
                             entries = Whitelist.entries(context)
                         }
-                        Pill("Impostazioni", false, Icons.Outlined.Tune) {
+                        Pill("Impostazioni", false, Ico.Tune) {
                             val user = report.profileUser
                             if (user == null) {
                                 context.startActivity(
@@ -1565,7 +1604,7 @@ private fun CheckScreen() {
                         val user = report.profileUser
                         if (user != null && Blocker.shizukuGranted()) {
                             // Toglie l'app solo dal profilo di lavoro, senza passare da Shelter.
-                            Pill("Disinstalla", false, Icons.Outlined.Delete) {
+                            Pill("Disinstalla", false, Ico.Delete) {
                                 Thread {
                                     val ok = Profiles.uninstall(report.pkg, user)
                                     (context as? Activity)?.runOnUiThread {
@@ -1607,7 +1646,7 @@ private fun ProtectionPanel(tick: Int) {
     Text("Protezione preventiva", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = p.text)
     Panel {
         StatusRow(
-            Icons.Outlined.Download, "Controllo dei download",
+            Ico.Download, "Controllo dei download",
             if (filesAccess) "Attivo sulla cartella Download" else "Serve l'accesso a tutti i file",
             if (filesAccess) Level.OK else Level.WARN,
         ) {
@@ -1619,12 +1658,12 @@ private fun ProtectionPanel(tick: Int) {
                             android.net.Uri.fromParts("package", context.packageName, null),
                         )
                     )
-                }) { Text("Concedi", color = p.accent, fontWeight = FontWeight.SemiBold) }
+                }) { Text("Concedi", color = p.accentText, fontWeight = FontWeight.SemiBold) }
             }
         }
         Divider()
         StatusRow(
-            Icons.Outlined.PauseCircle, "Sospendi app nuove sospette",
+            Ico.Pause, "Sospendi app nuove sospette",
             when {
                 !autoSuspend -> "Spento: solo avviso"
                 shizuku -> "Prima che tu le apra"
@@ -1639,14 +1678,14 @@ private fun ProtectionPanel(tick: Int) {
                     autoSuspend = on
                 },
                 colors = SwitchDefaults.colors(
-                    checkedTrackColor = p.accent, checkedThumbColor = p.background,
+                    checkedTrackColor = p.accent, checkedThumbColor = p.onAccent,
                     uncheckedTrackColor = p.raised, uncheckedBorderColor = p.border, uncheckedThumbColor = p.secondary,
                 ),
             )
         }
         Divider()
         StatusRow(
-            Icons.Outlined.InstallMobile, "Possono installare app",
+            Ico.InstallMobile, "Possono installare app",
             if (installers.isEmpty()) "Nessuna app" else "${installers.size} app",
             if (installers.all { it in allowed }) Level.OK else Level.ERROR,
         ) {}
@@ -1744,7 +1783,7 @@ private fun FileList() {
                         Text("• ${finding.text}", fontSize = 13.sp, color = p.text, modifier = Modifier.padding(top = 4.dp))
                     }
                     Text(
-                        "SHA-256 ${file.sha256}", fontSize = 11.sp, fontFamily = FontFamily.Monospace,
+                        "SHA-256 ${file.sha256}", fontSize = 11.sp, fontFamily = Mono,
                         color = p.secondary, modifier = Modifier.padding(top = 8.dp),
                     )
                     Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1754,7 +1793,7 @@ private fun FileList() {
                                 files = FileLog.all(context)
                             }
                         }
-                        Pill("Copia hash", false, Icons.Outlined.ContentCopy) {
+                        Pill("Copia hash", false, Ico.ContentCopy) {
                             context.getSystemService(ClipboardManager::class.java)
                                 .setPrimaryClip(ClipData.newPlainText("sha256", file.sha256))
                         }

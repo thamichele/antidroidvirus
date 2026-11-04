@@ -9,15 +9,17 @@
   <meta name="description" content="Repository F-Droid personale di AntiDroidVirus: registra l'uso dei permessi e segnala app e download sospetti.">
   <meta name="robots" content="noindex">
   <link rel="icon" type="image/png" href="@@REPO@@/icons/icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
   <style>
     :root { --bg: #F6F4EF; --panel: #FFFFFF; --raised: #EFECE6; --border: #DDD8CF; --text: #22201D;
-            --secondary: #6B665E; --accent: #B4572F; --ok: #2F7D71; }
+            --secondary: #6B665E; --accent: #A85400; --link: #A85400; --on-accent: #FFFFFF; --ok: #1F6B60; }
     @media (prefers-color-scheme: dark) {
       :root { --bg: #1C1B1A; --panel: #252422; --raised: #2E2C2A; --border: #3A3734; --text: #EDEAE3;
-              --secondary: #A39E95; --accent: #E3845A; --ok: #5DB3A6; }
+              --secondary: #A39E95; --accent: #D96D00; --link: #F08A2A; --on-accent: #1C1B1A; --ok: #5DB3A6; }
     }
     * { box-sizing: border-box; }
-    body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 Inter, system-ui, sans-serif; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.6 "JetBrains Mono", ui-monospace, monospace; }
     main { max-width: 640px; margin: 0 auto; padding: 40px 20px 56px; }
     header { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
     header img { width: 64px; height: 64px; }
@@ -26,17 +28,17 @@
     header p { margin: 2px 0 0; color: var(--secondary); }
     .pill { display: inline-block; font-size: 13px; font-weight: 600; padding: 2px 10px; border-radius: 999px;
             background: var(--raised); border: 1px solid var(--border); color: var(--secondary); }
-    section { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 20px; margin-bottom: 16px; }
+    section { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
     h2 { font-size: 16px; margin: 0 0 12px; }
     ol { margin: 0; padding-left: 20px; } li + li { margin-top: 6px; }
-    .button { display: inline-block; background: var(--accent); color: #fff; text-decoration: none; font-weight: 600;
-              padding: 10px 20px; border-radius: 999px; margin: 4px 0 14px; }
+    .button { display: inline-block; background: var(--accent); color: var(--on-accent); text-decoration: none; font-weight: 600;
+              padding: 10px 20px; border-radius: 4px; margin: 4px 0 14px; }
     code { display: block; font: 13px/1.45 "JetBrains Mono", ui-monospace, monospace; word-break: break-all;
-           background: var(--raised); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+           background: var(--raised); border: 1px solid var(--border); border-radius: 4px; padding: 10px 12px; }
     .qr { display: flex; gap: 16px; align-items: center; margin-top: 14px; color: var(--secondary); font-size: 14px; }
     .qr span { min-width: 0; overflow-wrap: anywhere; }
     .qr img { width: 120px; height: 120px; border-radius: 8px; background: #fff; padding: 6px; flex: none; }
-    a { color: var(--accent); }
+    a { color: var(--link); }
     footer { color: var(--secondary); font-size: 14px; text-align: center; }
   </style>
 </head>

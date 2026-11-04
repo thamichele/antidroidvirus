@@ -9,6 +9,7 @@ import org.lsposed.hiddenapibypass.HiddenApiBypass
 class App : Application() {
     override fun onCreate() {
         super.onCreate()
+        Accent.load(this)
         // AppOpsManager.getPackagesForOps e le classi PackageOps/OpEntry sono API nascoste.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             HiddenApiBypass.addHiddenApiExemptions("L")
