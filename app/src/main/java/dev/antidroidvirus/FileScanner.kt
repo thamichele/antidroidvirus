@@ -272,7 +272,7 @@ object FileScanner {
         val js = Regex("/JavaScript|/JS[\\s(<\\[/]").containsMatchIn(text)
         if (js) findings += Finding("Contiene JavaScript", 40)
         if (text.contains("/Launch")) findings += Finding("Può lanciare programmi esterni", 50)
-        if (text.contains("/EmbeddedFile")) findings += Finding("Contiene file allegati nascosti", 25)
+        if (text.contains("/EmbeddedFile")) findings += embeddedFiles(text)
         if (text.contains("/OpenAction") && js) findings += Finding("Esegue codice appena aperto", 10)
         if (text.contains("/RichMedia")) findings += Finding("Contiene contenuti Flash o multimediali attivi", 20)
         if (text.contains("/XFA")) findings += Finding("Usa moduli XFA, spesso sfruttati dagli attacchi", 10)
@@ -282,6 +282,40 @@ object FileScanner {
             findings += Finding("Nasconde comandi pericolosi con nomi offuscati", 40)
         }
         return findings
+    }
+
+    /** Allegati innocui per natura: dati, testo, immagini, altri PDF. */
+    private val SAFE_ATTACHMENT_EXT = setOf("xml", "txt", "csv", "json", "pdf", "jpg", "jpeg", "png", "gif", "webp", "tif", "tiff")
+
+    /** Fatture elettroniche ZUGFeRD / Factur-X / XRechnung / Order-X: un XML standard allegato al PDF. */
+    private val E_INVOICE_NAMES = setOf("factur-x.xml", "zugferd-invoice.xml", "xrechnung.xml", "order-x.xml")
+
+    /**
+     * Gli allegati nei PDF sono normali nelle fatture elettroniche europee, quindi si guarda il nome:
+     * un eseguibile o un documento con macro è pericoloso, dati e immagini no, il resto resta sospetto.
+     */
+    private fun embeddedFiles(text: String): List<Finding> {
+        val names = Regex("/Filespec").findAll(text).flatMap { m ->
+            val dict = text.substring(m.range.first, minOf(text.length, m.range.first + 1500)).substringBefore("endobj")
+            Regex("/(?:UF|F)\\s*\\(((?:\\\\.|[^\\\\)]){1,300})\\)").findAll(dict).map { pdfString(it.groupValues[1]) }
+        }.filter { it.isNotBlank() }.toSet()
+        if (names.isEmpty()) return listOf(Finding("Contiene file allegati nascosti", 25))
+        val exts = names.associateWith { it.substringAfterLast('.', "").lowercase(Locale.ROOT) }
+        val bad = names.filter { exts[it] in EXECUTABLE_EXT || exts[it] in setOf("docm", "xlsm", "pptm", "dotm", "xltm", "hta", "html", "htm", "svg") }
+        if (bad.isNotEmpty()) return listOf(Finding("Contiene un allegato eseguibile o con codice: ${bad.first()}", 50))
+        if (names.all { it.lowercase(Locale.ROOT) in E_INVOICE_NAMES }) return emptyList()
+        if (names.all { exts[it] in SAFE_ATTACHMENT_EXT }) return listOf(Finding("Contiene allegati di dati: ${names.joinToString()}", 5))
+        return listOf(Finding("Contiene file allegati: ${names.joinToString()}", 25))
+    }
+
+    /** Stringa letterale PDF: toglie gli escape e decodifica UTF-16 se c'è il BOM. */
+    private fun pdfString(raw: String): String {
+        val s = Regex("\\\\(.)").replace(raw) { it.groupValues[1] }
+        return if (s.startsWith("þÿ")) {
+            String(s.drop(2).map { it.code.toByte() }.toByteArray(), Charsets.UTF_16BE)
+        } else {
+            s
+        }.trim()
     }
 
     private fun decodeName(name: String): String =
